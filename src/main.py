@@ -57,15 +57,6 @@ class BodybuildingApp(tk.Tk):
     def show_frame(self, frame_name):
         """Bring the desired frame to the front using the frame name."""
         frame = self.frames[frame_name]
-
-        # Special handling for LiveDetectionScreen
-        if frame_name == "LiveDetectionScreen":
-            frame.start_camera()  # Start the camera feed when showing LiveDetectionScreen
-        else:
-            # Stop the camera when leaving LiveDetectionScreen
-            live_detection_frame = self.frames["LiveDetectionScreen"]
-            live_detection_frame.stop_camera()
-
         frame.tkraise()  # Raise the selected frame to the front
 
     def on_closing(self):
