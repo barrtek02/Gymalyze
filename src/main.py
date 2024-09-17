@@ -1,5 +1,8 @@
 import tkinter as tk
-from tkinter import PhotoImage  # Import PhotoImage for handling images
+from tkinter import PhotoImage, messagebox
+from tkinter import ttk  # Import ttk for themed widgets
+import sv_ttk  # Import Sun Valley theme
+
 from gui.login_screen import LoginScreen
 from gui.home_screen import HomeScreen
 from gui.live_detection import LiveDetectionScreen
@@ -29,6 +32,9 @@ class BodybuildingApp(tk.Tk):
         # Start by showing the login screen
         self.show_frame("LoginScreen")
 
+        # Apply the Sun Valley Dark theme
+        sv_ttk.set_theme("dark")  # Set the theme to dark
+
     def set_app_icon(self):
         """Set the app icon using the gymalyze icon from assets"""
         icon_path = os.path.join(
@@ -47,9 +53,7 @@ class BodybuildingApp(tk.Tk):
             UploadVideoScreen,
             SignUpScreen,
         ):
-            frame = F(
-                parent=self.container, controller=self, db=self.db
-            )  # Pass the shared db connection
+            frame = F(parent=self.container, controller=self, db=self.db)
             frame_name = F.__name__  # Get the name of the class as a string
             self.frames[frame_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")

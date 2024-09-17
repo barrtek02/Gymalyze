@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import ttk
 
 
 class LoginScreen(tk.Frame):
@@ -8,19 +9,26 @@ class LoginScreen(tk.Frame):
         self.controller = controller
         self.db = db
 
-        tk.Label(self, text="Username:").pack(pady=10)
-        self.username_entry = tk.Entry(self)
+        # Username label and entry
+        ttk.Label(self, text="Username:").pack(pady=10)
+        self.username_entry = ttk.Entry(self)  # Use ttk.Entry for theme consistency
         self.username_entry.pack()
 
-        tk.Label(self, text="Password:").pack(pady=10)
-        self.password_entry = tk.Entry(self, show="*")
+        # Password label and entry
+        ttk.Label(self, text="Password:").pack(pady=10)
+        self.password_entry = ttk.Entry(
+            self, show="*"
+        )  # Use ttk.Entry for theme consistency
         self.password_entry.pack()
 
-        login_button = tk.Button(self, text="Login", command=self.check_login)
+        # Login button
+        login_button = ttk.Button(
+            self, text="Login", command=self.check_login
+        )  # Use ttk.Button
         login_button.pack(pady=20)
 
-        # Add a "Sign Up" button
-        sign_up_button = tk.Button(
+        # Sign Up button
+        sign_up_button = ttk.Button(
             self, text="Sign Up", command=lambda: controller.show_frame("SignUpScreen")
         )
         sign_up_button.pack(pady=10)
