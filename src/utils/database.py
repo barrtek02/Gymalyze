@@ -7,14 +7,16 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "../data/app_data.db")
 
 
 class Database:
-    def __init__(self):
+    def __init__(self, db_path=None):
+        """Initialize the database connection. Default to DB_PATH if none provided."""
+        self.db_path = db_path or DB_PATH  # Use provided path or default path
         self.conn = self.create_connection()
 
     def create_connection(self):
-        """Create a database connection to the SQLite database"""
+        """Create a database connection to the SQLite database."""
         conn = None
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(self.db_path)
         except Error as e:
             print(f"Error connecting to the database: {e}")
         return conn
