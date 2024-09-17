@@ -14,12 +14,18 @@ class LoginScreen(tk.Frame):
         self.username_entry = ttk.Entry(self)  # Use ttk.Entry for theme consistency
         self.username_entry.pack()
 
+        # Pre-populate the username entry with 'admin'
+        self.username_entry.insert(0, "admin")
+
         # Password label and entry
         ttk.Label(self, text="Password:").pack(pady=10)
         self.password_entry = ttk.Entry(
             self, show="*"
         )  # Use ttk.Entry for theme consistency
         self.password_entry.pack()
+
+        # Pre-populate the password entry with 'admin'
+        self.password_entry.insert(0, "admin")
 
         # Login button
         login_button = ttk.Button(
