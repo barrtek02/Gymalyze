@@ -33,5 +33,7 @@ jobs:
       run: |
         black . --check
     - name: Test with pytest
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src  # Add the src directory to PYTHONPATH
       run: |
         pytest
