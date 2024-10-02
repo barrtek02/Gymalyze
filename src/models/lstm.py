@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class ExerciseLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(ExerciseLSTM, self).__init__()

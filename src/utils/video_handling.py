@@ -87,9 +87,7 @@ class VideoProcessor:
         :param output_dir: Directory where the .npy files will be saved.
         :param video_name: Name of the video file (without extension) for creating unique filenames.
         """
-        output_dir.mkdir(
-            parents=True, exist_ok=True
-        )
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         np.save(output_dir / f"{video_name}_landmarks.npy", np.array(X, dtype=object))
         np.save(output_dir / f"{video_name}_labels.npy", np.array(y))
@@ -143,6 +141,4 @@ class VideoProcessor:
 
                 for future in futures:
                     future.result()
-                    pbar.update(
-                        1
-                    )
+                    pbar.update(1)
