@@ -42,7 +42,8 @@ class VideoProcessor:
         cap.release()
         cv2.destroyAllWindows()
 
-    def process_video(self, video_path: Path) -> list:
+    @staticmethod
+    def process_video(video_path: Path) -> list[list[list[float]]]:
         """
         Process a single video file, extract pose landmarks, and return them.
 
@@ -67,7 +68,12 @@ class VideoProcessor:
                 pose_landmarks = pose_estimator.estimate_pose(frame)
 
                 if pose_landmarks:
-                    all_landmarks.append(pose_landmarks)
+                    all_landmarks.append(
+                        [
+                            [lm.x, lm.y, lm.z, lm.visibility]
+                            for lm in pose_landmarks.landmark
+                        ]
+                    )
 
             except ValueError as e:
                 print(f"Skipping frame due to error: {e}")
@@ -76,9 +82,8 @@ class VideoProcessor:
         cap.release()
         return all_landmarks
 
-    def save_pose_data(
-        self, X: list, y: list, output_dir: Path, video_name: str
-    ) -> None:
+    @staticmethod
+    def save_pose_data(X: list, y: list, output_dir: Path, video_name: str) -> None:
         """
         Save the processed pose landmarks and labels to .npy files.
 
