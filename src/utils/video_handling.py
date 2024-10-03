@@ -149,7 +149,7 @@ class VideoProcessor:
                     pbar.update(1)
 
     @staticmethod
-    def classify_video(model, sequence):
+    def classify_sequence(model: torch.nn.Module, sequence: np.ndarray) -> int:
         """
         Predict the exercise class for the given sequence using the model.
         """
