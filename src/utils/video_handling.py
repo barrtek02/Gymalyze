@@ -1,4 +1,6 @@
 import cv2
+import torch
+
 from src.utils.pose_estimator import PoseEstimator
 from pathlib import Path
 import numpy as np
@@ -7,19 +9,15 @@ from tqdm import tqdm
 
 
 class VideoProcessor:
-    def __init__(self, pose_estimator: PoseEstimator) -> None:
-        """
-        Initialize the video processor with a PoseEstimator instance.
-        """
-        self.pose_estimator = pose_estimator
-
-    def show_video_with_skeleton(self, video_path: Path) -> None:
+    @staticmethod
+    def show_video_with_skeleton(video_path: Path) -> None:
         """
         Display the video with the pose skeleton overlaid on the frames in real-time.
 
         :param video_path: Path to the video file (as a Path object).
         """
         cap = cv2.VideoCapture(str(video_path))
+        pose_estimator = PoseEstimator()
 
         if not cap.isOpened():
             raise ValueError(f"Unable to open video file: {video_path}")
@@ -29,10 +27,10 @@ class VideoProcessor:
             if not ret:
                 break
 
-            pose_landmarks = self.pose_estimator.estimate_pose(frame)
+            pose_landmarks = pose_estimator.estimate_pose(frame)
 
             if pose_landmarks:
-                frame = self.pose_estimator.draw_pose(frame, pose_landmarks)
+                frame = pose_estimator.draw_pose(frame, pose_landmarks)
 
             cv2.imshow("Video with Pose Skeleton", frame)
 
@@ -70,7 +68,7 @@ class VideoProcessor:
                 if pose_landmarks:
                     all_landmarks.append(
                         [
-                            [lm.x, lm.y, lm.z, lm.visibility]
+                            np.array([lm.x, lm.y, lm.z, lm.visibility]).flatten()
                             for lm in pose_landmarks.landmark
                         ]
                     )
@@ -80,7 +78,9 @@ class VideoProcessor:
                 continue
 
         cap.release()
-        return all_landmarks
+        return np.array(
+            [np.array(sample).flatten() for sample in all_landmarks], dtype=np.float32
+        )
 
     @staticmethod
     def save_pose_data(X: list, y: list, output_dir: Path, video_name: str) -> None:
@@ -147,3 +147,16 @@ class VideoProcessor:
                 for future in futures:
                     future.result()
                     pbar.update(1)
+
+    @staticmethod
+    def classify_video(model, sequence):
+        """
+        Predict the exercise class for the given sequence using the model.
+        """
+        sequence = np.expand_dims(sequence, axis=0)
+        sequence = torch.tensor(sequence, dtype=torch.float32)
+
+        with torch.no_grad():
+            outputs = model(sequence)
+            _, predicted = torch.max(outputs.data, 1)
+            return predicted.item()
