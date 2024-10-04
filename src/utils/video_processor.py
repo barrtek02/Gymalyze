@@ -41,43 +41,86 @@ class VideoProcessor:
         cv2.destroyAllWindows()
 
     @staticmethod
-    def process_video(video_path: Path) -> list[list[list[float]]]:
+    def process_video(video_path: Path) -> np.ndarray:
         """
-        Process a single video file, extract pose landmarks, and return them.
+        Process a single video file and extract pose landmarks for each frame.
 
         :param video_path: Path to the video file (as a Path object).
-        :return: A list of pose landmarks for each frame in the video.
+        :return: A NumPy array of pose landmarks for each frame.
         """
-        pose_estimator = (
-            PoseEstimator()
-        )  # Create a new PoseEstimator instance for each thread
-        cap = cv2.VideoCapture(str(video_path))
+        pose_estimator = PoseEstimator()
+        video_capture = VideoProcessor._open_video(video_path)
+        all_landmarks = VideoProcessor._extract_landmarks(video_capture, pose_estimator)
+        video_capture.release()
+        return VideoProcessor._format_landmarks(all_landmarks)
+
+    @staticmethod
+    def _open_video(video_path: Path) -> cv2.VideoCapture:
+        """
+        Open the video file for processing.
+
+        :param video_path: Path to the video file (as a Path object).
+        :return: An opened VideoCapture object.
+        """
+        video_capture = cv2.VideoCapture(str(video_path))
+        if not video_capture.isOpened():
+            raise ValueError(f"Unable to open video file: {video_path}")
+        return video_capture
+
+    @staticmethod
+    def _extract_landmarks(
+        video_capture: cv2.VideoCapture, pose_estimator
+    ) -> list[list[np.ndarray]]:
+        """
+        Read video frames and extract pose landmarks from each frame.
+
+        :param video_capture: Opened VideoCapture object.
+        :param pose_estimator: PoseEstimator instance.
+        :return: A list of pose landmarks for each frame.
+        """
         all_landmarks = []
 
-        if not cap.isOpened():
-            raise ValueError(f"Unable to open video file: {video_path}")
-
-        while cap.isOpened():
-            ret, frame = cap.read()
+        while video_capture.isOpened():
+            ret, frame = video_capture.read()
             if not ret:
                 break
 
             try:
-                pose_landmarks = pose_estimator.estimate_pose(frame)
-
+                pose_landmarks = VideoProcessor._process_frame(frame, pose_estimator)
                 if pose_landmarks:
-                    all_landmarks.append(
-                        [
-                            np.array([lm.x, lm.y, lm.z, lm.visibility]).flatten()
-                            for lm in pose_landmarks.landmark
-                        ]
-                    )
-
+                    all_landmarks.append(pose_landmarks)
             except ValueError as e:
                 print(f"Skipping frame due to error: {e}")
                 continue
 
-        cap.release()
+        return all_landmarks
+
+    @staticmethod
+    def _process_frame(frame: np.ndarray, pose_estimator) -> list[np.ndarray]:
+        """
+        Process a single frame to extract pose landmarks.
+
+        :param frame: Single frame from the video as a NumPy array.
+        :param pose_estimator: PoseEstimator instance.
+        :return: List of pose landmarks as flattened arrays.
+        """
+        pose_landmarks = pose_estimator.estimate_pose(frame)
+
+        if pose_landmarks:
+            return [
+                np.array([lm.x, lm.y, lm.z, lm.visibility]).flatten()
+                for lm in pose_landmarks.landmark
+            ]
+        return []
+
+    @staticmethod
+    def _format_landmarks(all_landmarks: list[list[np.ndarray]]) -> np.ndarray:
+        """
+                Format the list of pose landmarks into a NumPy array.
+        b
+                :param all_landmarks: List of pose landmarks for each frame.
+                :return: A NumPy array of the formatted pose landmarks.
+        """
         return np.array(
             [np.array(sample).flatten() for sample in all_landmarks], dtype=np.float32
         )
