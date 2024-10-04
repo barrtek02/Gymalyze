@@ -149,14 +149,17 @@ class VideoProcessor:
                     pbar.update(1)
 
     @staticmethod
-    def classify_sequence(model: torch.nn.Module, sequence: np.ndarray) -> int:
+    def classify_sequence(model: torch.nn.Module, sequence: np.ndarray) -> np.ndarray:
         """
         Predict the exercise class for the given sequence using the model.
+
+        :param model: PyTorch model for exercise classification.
+        :param sequence: Numpy array containing the pose landmarks for a single video.
+        :return: Numpy array containing the predicted class probabilities.
         """
         sequence = np.expand_dims(sequence, axis=0)
         sequence = torch.tensor(sequence, dtype=torch.float32)
 
         with torch.no_grad():
             outputs = model(sequence)
-            _, predicted = torch.max(outputs.data, 1)
-            return predicted.item()
+            return torch.nn.functional.softmax(outputs, dim=1).numpy().flatten()
