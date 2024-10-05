@@ -86,7 +86,7 @@ class VideoProcessor:
                 break
 
             try:
-                pose_landmarks = VideoProcessor._process_frame(frame, pose_estimator)
+                pose_landmarks = VideoProcessor.process_frame(frame, pose_estimator)
                 if pose_landmarks:
                     all_landmarks.append(pose_landmarks)
             except ValueError as e:
@@ -96,7 +96,7 @@ class VideoProcessor:
         return all_landmarks
 
     @staticmethod
-    def _process_frame(frame: np.ndarray, pose_estimator) -> list[np.ndarray]:
+    def process_frame(frame: np.ndarray, pose_estimator) -> list[np.ndarray]:
         """
         Process a single frame to extract pose landmarks.
 

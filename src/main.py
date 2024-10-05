@@ -75,12 +75,21 @@ class BodybuildingApp(tk.Tk):
             UploadVideoScreen,
             SignUpScreen,
         ):
-            frame = F(parent=self.container, controller=self, db=self.db)
+            if F in [LiveDetectionScreen]:
+                frame = F(
+                    parent=self.container,
+                    controller=self,
+                    db=self.db,
+                    model=self.classification_model,
+                    device=self.processing_device,
+                )
+            else:
+                frame = F(parent=self.container, controller=self, db=self.db)
+
             frame_name = F.__name__
             self.frames[frame_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        # Configure resizing properties for the container
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
@@ -132,6 +141,8 @@ class BodybuildingApp(tk.Tk):
 
         frame = self.frames[frame_name]
         frame.tkraise()  # Raise the selected frame to the front
+        if frame_name == "LiveDetectionScreen":
+            frame.on_show()
 
     def on_resize(self, event) -> None:
         """Optional: Handle resizing logic."""

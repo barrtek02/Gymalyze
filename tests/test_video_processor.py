@@ -35,7 +35,7 @@ class TestVideoProcessor(unittest.TestCase):
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
 
         # WHEN
-        landmarks = video_processor._process_frame(frame, mock_pose)
+        landmarks = video_processor.process_frame(frame, mock_pose)
 
         # THEN
         self.assertEqual(len(landmarks), 1)
