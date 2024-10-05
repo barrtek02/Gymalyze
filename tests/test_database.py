@@ -1,10 +1,11 @@
 import sys
 import os
 
+from src.utils.database import Database
+
 # Add src/ to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from utils.database import Database
 import unittest
 
 
