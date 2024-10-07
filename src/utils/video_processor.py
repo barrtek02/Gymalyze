@@ -52,7 +52,7 @@ class VideoProcessor:
         video_capture = VideoProcessor._open_video(video_path)
         all_landmarks = VideoProcessor._extract_landmarks(video_capture, pose_estimator)
         video_capture.release()
-        return VideoProcessor._format_landmarks(all_landmarks)
+        return VideoProcessor.format_landmarks(all_landmarks)
 
     @staticmethod
     def _open_video(video_path: Path) -> cv2.VideoCapture:
@@ -96,30 +96,24 @@ class VideoProcessor:
         return all_landmarks
 
     @staticmethod
-    def process_frame(frame: np.ndarray, pose_estimator) -> list[np.ndarray]:
+    def process_pose_landmarks(pose_landmarks) -> list[np.ndarray]:
         """
-        Process a single frame to extract pose landmarks.
-
-        :param frame: Single frame from the video as a NumPy array.
-        :param pose_estimator: PoseEstimator instance.
-        :return: List of pose landmarks as flattened arrays.
+        Process the pose landmarks into a format suitable for training the model.
+        :param pose_landmarks:
+        :return:
         """
-        pose_landmarks = pose_estimator.estimate_pose(frame)
-
-        if pose_landmarks:
-            return [
-                np.array([lm.x, lm.y, lm.z, lm.visibility]).flatten()
-                for lm in pose_landmarks.landmark
-            ]
-        return []
+        return [
+            np.array([lm.x, lm.y, lm.z, lm.visibility]).flatten()
+            for lm in pose_landmarks.landmark
+        ]
 
     @staticmethod
-    def _format_landmarks(all_landmarks: list[list[np.ndarray]]) -> np.ndarray:
+    def format_landmarks(all_landmarks: list[list[np.ndarray]]) -> np.ndarray:
         """
-                Format the list of pose landmarks into a NumPy array.
-        b
-                :param all_landmarks: List of pose landmarks for each frame.
-                :return: A NumPy array of the formatted pose landmarks.
+        Format the list of pose landmarks into a NumPy array.
+
+        :param all_landmarks: List of pose landmarks for each frame.
+        :return: A NumPy array of the formatted pose landmarks.
         """
         return np.array(
             [np.array(sample).flatten() for sample in all_landmarks], dtype=np.float32
@@ -192,17 +186,39 @@ class VideoProcessor:
                     pbar.update(1)
 
     @staticmethod
-    def classify_sequence(model: torch.nn.Module, sequence: np.ndarray) -> np.ndarray:
+    def classify_sequence(
+        model: torch.nn.Module, sequence: np.ndarray, device: torch.device
+    ) -> np.ndarray:
         """
         Predict the exercise class for the given sequence using the model.
 
+        :param device: PyTorch device to use for inference.
         :param model: PyTorch model for exercise classification.
         :param sequence: Numpy array containing the pose landmarks for a single video.
         :return: Numpy array containing the predicted class probabilities.
         """
         sequence = np.expand_dims(sequence, axis=0)
-        sequence = torch.tensor(sequence, dtype=torch.float32)
+        sequence = torch.tensor(sequence, dtype=torch.float32).to(device)
 
         with torch.no_grad():
             outputs = model(sequence)
-            return torch.nn.functional.softmax(outputs, dim=1).numpy().flatten()
+            # Move the tensor to the CPU before converting to numpy
+            return torch.nn.functional.softmax(outputs, dim=1).cpu().numpy().flatten()
+
+    @staticmethod
+    def convert_index_to_exercise_name(index: int) -> str:
+        """
+        Convert the predicted class index to the corresponding exercise name.
+
+        :param index: Index of the predicted class.
+        :return: Exercise name corresponding to the index.
+        """
+        exercise_names = [
+            "bench_press",
+            "bicep_curl",
+            "squat",
+            "deadlift",
+            "push_up",
+        ]
+
+        return exercise_names[index]

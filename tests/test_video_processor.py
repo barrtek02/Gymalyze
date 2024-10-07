@@ -35,7 +35,9 @@ class TestVideoProcessor(unittest.TestCase):
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
 
         # WHEN
-        landmarks = video_processor.process_frame(frame, mock_pose)
+        landmarks = video_processor.process_pose_landmarks(
+            mock_pose.estimate_pose(frame)
+        )
 
         # THEN
         self.assertEqual(len(landmarks), 1)
@@ -50,7 +52,7 @@ class TestVideoProcessor(unittest.TestCase):
         ]
 
         # WHEN
-        formatted_landmarks = video_processor._format_landmarks(all_landmarks)
+        formatted_landmarks = video_processor.format_landmarks(all_landmarks)
 
         # THEN
         self.assertIsInstance(formatted_landmarks, np.ndarray)

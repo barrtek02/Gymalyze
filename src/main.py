@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import PhotoImage
 from tkinter import ttk
 from tkinter import messagebox
-import threading
 import sv_ttk
 import torch
 
@@ -20,14 +19,13 @@ import os
 class BodybuildingApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.processing_device: torch.device | None = None
+        self.device: torch.device | None = None
         self.icon_img: PhotoImage | None = None
         self.classification_model: ExerciseLSTM | None = None
 
         self.set_window_geometry()
         self.set_app_icon()
         self.db = Database()
-        self.model_loaded: bool = False
 
         # Container for holding frames (screens)
         self.container: ttk.Frame = ttk.Frame(self)
@@ -43,7 +41,7 @@ class BodybuildingApp(tk.Tk):
         sv_ttk.set_theme("dark")
         self.bind("<Configure>", self.on_resize)
 
-        self._load_model_in_background()
+        self.load_model()
 
     def set_window_geometry(self) -> None:
         """Set the initial window geometry and handle resizing."""
@@ -75,13 +73,13 @@ class BodybuildingApp(tk.Tk):
             UploadVideoScreen,
             SignUpScreen,
         ):
-            if F in [LiveDetectionScreen]:
+            if F == LiveDetectionScreen:
                 frame = F(
                     parent=self.container,
                     controller=self,
                     db=self.db,
-                    model=self.classification_model,
-                    device=self.processing_device,
+                    model=None,  # Pass None initially, model will be assigned after loading
+                    device=None,
                 )
             else:
                 frame = F(parent=self.container, controller=self, db=self.db)
@@ -93,11 +91,6 @@ class BodybuildingApp(tk.Tk):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-    def _load_model_in_background(self) -> None:
-        """Start a separate thread to load the model in the background."""
-        loading_thread = threading.Thread(target=self.load_model)
-        loading_thread.start()
-
     def load_model(
         self,
         input_size: int = 33 * 4,
@@ -107,42 +100,37 @@ class BodybuildingApp(tk.Tk):
     ) -> None:
         """Loads the model in a background thread."""
         try:
-            self.processing_device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            )
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.classification_model = ExerciseLSTM(
                 input_size, hidden_size, num_layers, num_classes
             )
             self.classification_model.load_state_dict(
                 torch.load(
                     r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\lstm_v1.pth",
-                    map_location=self.processing_device,
+                    map_location=self.device,
                 )
             )
-            self.classification_model.to(self.processing_device)
+            self.classification_model.to(self.device)
             self.classification_model.eval()
 
-            self.model_loaded = True
+            # Notify the LiveDetectionScreen that model is ready
+            self.frames["LiveDetectionScreen"].model = self.classification_model
+            self.frames["LiveDetectionScreen"].device = self.device
+
         except Exception as e:
             messagebox.showerror("Model Load Error", f"Error loading model: {str(e)}")
 
     def show_frame(self, frame_name) -> None:
         """Show the desired frame by bringing it to the front."""
-        if frame_name in [
-            "LiveDetectionScreen",
-            "TrainSpecificScreen",
-            "UploadVideoScreen",
-        ]:
-            if not self.model_loaded:
-                messagebox.showwarning(
-                    "Model Not Ready", "The model is still loading. Please wait."
-                )
-                return
-
         frame = self.frames[frame_name]
         frame.tkraise()  # Raise the selected frame to the front
         if frame_name == "LiveDetectionScreen":
-            frame.on_show()
+            if self.classification_model is None:
+                messagebox.showwarning(
+                    "Model Not Ready", "Model is still loading. Please wait."
+                )
+            else:
+                frame.on_show()
 
     def on_resize(self, event) -> None:
         """Optional: Handle resizing logic."""
