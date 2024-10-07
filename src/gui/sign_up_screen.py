@@ -3,10 +3,9 @@ from tkinter import messagebox
 
 
 class SignUpScreen(tk.Frame):
-    def __init__(self, parent, controller, db):
+    def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.db = db
 
         tk.Label(self, text="Sign Up", font=("Arial", 16)).pack(pady=20)
 
@@ -39,7 +38,7 @@ class SignUpScreen(tk.Frame):
             return
 
         try:
-            self.db.insert_user(username, password)
+            self.controller.db.insert_user(username, password)
             messagebox.showinfo("Success", "Account created successfully!")
             self.controller.show_frame("LoginScreen")
         except Exception as e:

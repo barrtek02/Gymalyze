@@ -4,10 +4,9 @@ from tkinter import ttk
 
 
 class LoginScreen(tk.Frame):
-    def __init__(self, parent, controller, db):
+    def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.db = db
 
         # Username label and entry
         ttk.Label(self, text="Username:").pack(pady=10)
@@ -43,7 +42,7 @@ class LoginScreen(tk.Frame):
         username = self.username_entry.get()
         password = self.password_entry.get()
 
-        user = self.db.validate_user(username, password)
+        user = self.controller.db.validate_user(username, password)
         if user:
             self.controller.show_frame("HomeScreen")
         else:

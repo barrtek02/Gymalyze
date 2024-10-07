@@ -2,10 +2,9 @@ import tkinter as tk
 
 
 class UploadVideoScreen(tk.Frame):
-    def __init__(self, parent, controller, db):
+    def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.db = db
 
         tk.Label(self, text="Upload Video for Review", font=("Arial", 16)).pack(pady=20)
 

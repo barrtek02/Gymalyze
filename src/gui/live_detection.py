@@ -1,7 +1,7 @@
 import threading
 import tkinter as tk
 from tkinter import Label
-from typing import Tuple, Any
+from typing import Any
 
 import cv2
 import numpy as np
@@ -17,22 +17,12 @@ from src.utils.imutils.video import WebcamVideoStream, FPS
 
 
 class LiveDetectionScreen(tk.Frame):
-    def __init__(
-        self,
-        parent: tk.Tk,
-        controller: tk.Tk,
-        db: Database,
-        model: ExerciseLSTM,
-        device: torch.device,
-    ) -> None:
+    def __init__(self, parent: tk.Tk, controller: tk.Tk) -> None:
         super().__init__(parent)
         self.process_thread = None
         self.fps: FPS | None = None
         self.vs: WebcamVideoStream | None = None
         self.controller: tk.Tk = controller
-        self.db: Database = db
-        self.model: ExerciseLSTM = model
-        self.device: torch.device = device
         self.video_processor: VideoProcessor = VideoProcessor()
         self.sliding_window = []
         self.sliding_window_size = 50
@@ -156,11 +146,11 @@ class LiveDetectionScreen(tk.Frame):
         """Classify the current sliding window."""
         sequence = np.array(self.video_processor.format_landmarks(self.sliding_window))
 
-        if self.model is None:
+        if self.controller.classification_model is None:
             raise ValueError("Model is None, ensure the model is loaded correctly!")
 
         probabilities = self.video_processor.classify_sequence(
-            self.model, sequence, self.device
+            self.controller.classification_model, sequence, self.controller.device
         )
         max_prob_index = np.argmax(probabilities)
 

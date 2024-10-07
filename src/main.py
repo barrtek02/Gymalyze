@@ -73,17 +73,7 @@ class BodybuildingApp(tk.Tk):
             UploadVideoScreen,
             SignUpScreen,
         ):
-            if F == LiveDetectionScreen:
-                frame = F(
-                    parent=self.container,
-                    controller=self,
-                    db=self.db,
-                    model=None,  # Pass None initially, model will be assigned after loading
-                    device=None,
-                )
-            else:
-                frame = F(parent=self.container, controller=self, db=self.db)
-
+            frame = F(parent=self.container, controller=self)
             frame_name = F.__name__
             self.frames[frame_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
@@ -112,10 +102,6 @@ class BodybuildingApp(tk.Tk):
             )
             self.classification_model.to(self.device)
             self.classification_model.eval()
-
-            # Notify the LiveDetectionScreen that model is ready
-            self.frames["LiveDetectionScreen"].model = self.classification_model
-            self.frames["LiveDetectionScreen"].device = self.device
 
         except Exception as e:
             messagebox.showerror("Model Load Error", f"Error loading model: {str(e)}")

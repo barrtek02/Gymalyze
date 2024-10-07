@@ -3,10 +3,9 @@ from tkinter import ttk
 
 
 class HomeScreen(tk.Frame):
-    def __init__(self, parent, controller, db):
+    def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.db = db
 
         # Apply ttk styling
         self.style = ttk.Style()
