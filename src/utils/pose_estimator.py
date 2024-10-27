@@ -33,7 +33,7 @@ class PoseEstimator:
 
     def draw_pose(
         self, frame: cv2.Mat, pose_landmarks: mp.solutions.pose.PoseLandmark
-    ) -> cv2.Mat:
+    ) -> None:
         """
         Draw pose landmarks on the given frame.
 
@@ -47,4 +47,3 @@ class PoseEstimator:
             self.mp_pose.POSE_CONNECTIONS,
             landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style(),
         )
-        return frame

@@ -22,12 +22,14 @@ class LiveDetectionScreen(tk.Frame):
         self.process_thread = None
         self.fps: FPS | None = None
         self.vs: WebcamVideoStream | None = None
+        self.pose_estimator: PoseEstimator | None = None
         self.controller: tk.Tk = controller
         self.video_processor: VideoProcessor = VideoProcessor()
         self.sliding_window = []
         self.sliding_window_size = 50
         self.current_prediction = "No Prediction"  # Default value
         self.current_probability = 0.0
+        self.current_landmarks = None
         self.frame_count = 0
 
         self.grid_columnconfigure(0, weight=1)
@@ -59,6 +61,7 @@ class LiveDetectionScreen(tk.Frame):
 
         self.vs = WebcamVideoStream().start()
         self.fps = FPS().start()
+        self.pose_estimator = PoseEstimator()
 
         # Start the thread that processes frames
         self.process_thread = threading.Thread(target=self.process_frames)
@@ -69,7 +72,6 @@ class LiveDetectionScreen(tk.Frame):
 
     def process_frames(self) -> None:
         """Thread function to process video frames in the background."""
-        pose_estimator = PoseEstimator()
 
         while not self.stop_event.is_set():
             if self.vs:
@@ -77,9 +79,8 @@ class LiveDetectionScreen(tk.Frame):
                 if frame is None:
                     continue
 
-                pose_landmarks_raw = pose_estimator.estimate_pose(frame)
-                pose_estimator.draw_pose(frame, pose_landmarks_raw)
-
+                pose_landmarks_raw = self.pose_estimator.estimate_pose(frame)
+                self.current_landmarks = pose_landmarks_raw
                 if pose_landmarks_raw:
                     self.sliding_window.append(
                         self.video_processor.process_pose_landmarks(pose_landmarks_raw)
@@ -97,6 +98,7 @@ class LiveDetectionScreen(tk.Frame):
             return
 
         frame = self.vs.read()
+        self.pose_estimator.draw_pose(frame, self.current_landmarks)
         if frame is None:
             return
 
@@ -174,5 +176,8 @@ class LiveDetectionScreen(tk.Frame):
         if self.fps is not None:
             self.fps.stop()  # Stop the FPS counter
             self.fps = None
+
+        if self.pose_estimator is not None:
+            self.pose_estimator = None
 
         self.controller.show_frame("HomeScreen")
