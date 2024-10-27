@@ -5,13 +5,11 @@ from typing import Any
 
 import cv2
 import numpy as np
-import torch
 from PIL import Image, ImageTk
 from numpy import ndarray, dtype, signedinteger
 
-from src.models.lstm import ExerciseLSTM
-from src.utils.database import Database
 from src.utils.pose_estimator import PoseEstimator
+from src.utils.repetition_counter import RepetitionCounter
 from src.utils.video_processor import VideoProcessor
 from src.utils.imutils.video import WebcamVideoStream, FPS
 
@@ -25,6 +23,7 @@ class LiveDetectionScreen(tk.Frame):
         self.pose_estimator: PoseEstimator | None = None
         self.controller: tk.Tk = controller
         self.video_processor: VideoProcessor = VideoProcessor()
+        self.repetition_counter = RepetitionCounter()
         self.sliding_window = []
         self.sliding_window_size = 50
         self.current_prediction = "No Prediction"  # Default value
@@ -62,6 +61,7 @@ class LiveDetectionScreen(tk.Frame):
         self.vs = WebcamVideoStream().start()
         self.fps = FPS().start()
         self.pose_estimator = PoseEstimator()
+        self.repetition_counter = RepetitionCounter()
 
         # Start the thread that processes frames
         self.process_thread = threading.Thread(target=self.process_frames)
@@ -89,6 +89,9 @@ class LiveDetectionScreen(tk.Frame):
                     if len(self.sliding_window) == self.sliding_window_size:
                         self.current_prediction, self.current_probability = (
                             self.classify_sliding_window()
+                        )
+                        self.repetition_counter.track_phases(
+                            self.sliding_window, self.current_prediction
                         )
                         self.sliding_window.pop(0)
 
@@ -125,7 +128,21 @@ class LiveDetectionScreen(tk.Frame):
             (0, 255, 0),
             2,
         )
-
+        # Display repetition count
+        if self.current_prediction != "No Prediction":
+            repetition_count = self.repetition_counter.get_repetition_count(
+                self.current_prediction
+            )
+            repetition_text = f"{self.current_prediction.capitalize()} Repetitions: {repetition_count}"
+            cv2.putText(
+                frame,
+                repetition_text,
+                (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 0),
+                2,
+            )
         # Convert frame to RGB (OpenCV uses BGR by default)
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -179,5 +196,8 @@ class LiveDetectionScreen(tk.Frame):
 
         if self.pose_estimator is not None:
             self.pose_estimator = None
+
+        if self.repetition_counter is not None:
+            self.repetition_counter = None
 
         self.controller.show_frame("HomeScreen")
