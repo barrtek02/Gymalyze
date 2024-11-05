@@ -6,12 +6,18 @@ from typing import Any
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
-from numpy import ndarray, dtype, signedinteger
 
 from src.utils.pose_estimator import PoseEstimator
 from src.utils.repetition_counter import RepetitionCounter
 from src.utils.video_processor import VideoProcessor
 from src.utils.imutils.video import WebcamVideoStream, FPS
+from src.utils.exercise_evaluators import (
+    SquatEvaluator,
+    DeadliftEvaluator,
+    BenchPressEvaluator,
+    PushUpEvaluator,
+    BicepCurlEvaluator,
+)
 
 
 class LiveDetectionScreen(tk.Frame):
@@ -30,6 +36,7 @@ class LiveDetectionScreen(tk.Frame):
         self.current_probability = 0.0
         self.current_landmarks = None
         self.frame_count = 0
+        self.current_feedback = ["No Feedback"]
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -50,6 +57,15 @@ class LiveDetectionScreen(tk.Frame):
         # Thread control variables
         self.stop_event = threading.Event()
 
+        # Instantiate Evaluators
+        self.evaluators = {
+            "bench_press": BenchPressEvaluator(),
+            "bicep_curl": BicepCurlEvaluator(),
+            "squat": SquatEvaluator(),
+            "deadlift": DeadliftEvaluator(),
+            "push_up": PushUpEvaluator(),
+        }
+
     def on_show(self) -> None:
         """Start the webcam feed and update the frames."""
         self.stop_event.clear()  # Reset the stop event before starting the new thread
@@ -57,6 +73,7 @@ class LiveDetectionScreen(tk.Frame):
         self.current_prediction = "No Prediction"  # Default value
         self.current_probability = 0.0
         self.sliding_window = []
+        self.current_feedback = ["No Feedback"]
 
         self.vs = WebcamVideoStream().start()
         self.fps = FPS().start()
@@ -95,6 +112,16 @@ class LiveDetectionScreen(tk.Frame):
                         )
                         self.sliding_window.pop(0)
 
+                        # Evaluate correctness if prediction is recognized
+                        exercise_key = self.current_prediction.lower()
+                        if exercise_key in self.evaluators:
+                            evaluator = self.evaluators[exercise_key]
+                            self.current_feedback = evaluator.evaluate(
+                                pose_landmarks_raw.landmark
+                            )
+                        else:
+                            self.current_feedback = ["Good form!"]
+
     def update_frame(self) -> None:
         """Update the video feed frame."""
         if self.vs is None:
@@ -118,7 +145,7 @@ class LiveDetectionScreen(tk.Frame):
         )
 
         # Add the prediction text
-        prediction_text = f"Prediction: {self.current_prediction} {round(self.current_probability, 2)}%"
+        prediction_text = f"Prediction: {self.current_prediction} ({round(self.current_probability, 2)}%)"
         cv2.putText(
             frame,
             prediction_text,
@@ -128,6 +155,7 @@ class LiveDetectionScreen(tk.Frame):
             (0, 255, 0),
             2,
         )
+
         # Display repetition count
         if self.current_prediction != "No Prediction":
             repetition_count = self.repetition_counter.get_repetition_count(
@@ -143,6 +171,23 @@ class LiveDetectionScreen(tk.Frame):
                 (0, 255, 0),
                 2,
             )
+
+        # Display feedback messages
+        if self.current_feedback and self.current_feedback != ["Good form!"]:
+            y_offset = 120  # Starting y-coordinate for feedback
+            for idx, feedback_msg in enumerate(self.current_feedback):
+                feedback_text = f"Feedback {idx + 1}: {feedback_msg}"
+                cv2.putText(
+                    frame,
+                    feedback_text,
+                    (10, y_offset + idx * 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+
         # Convert frame to RGB (OpenCV uses BGR by default)
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -161,7 +206,7 @@ class LiveDetectionScreen(tk.Frame):
 
     def classify_sliding_window(
         self,
-    ) -> tuple[str, ndarray[Any, dtype[signedinteger[Any]]]]:
+    ) -> tuple[str, np.ndarray]:
         """Classify the current sliding window."""
         sequence = np.array(self.video_processor.format_landmarks(self.sliding_window))
 

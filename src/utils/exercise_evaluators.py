@@ -1,3 +1,7 @@
+import numpy as np
+import mediapipe as mp
+
+
 class SquatEvaluator:
     def __init__(self):
         # Define the ideal ranges for joint angles
@@ -22,6 +26,7 @@ class SquatEvaluator:
 
     def evaluate(self, landmarks):
         feedback = []
+        mp_pose = mp.solutions.pose
 
         # Get coordinates
         left_hip = [
@@ -86,6 +91,7 @@ class DeadliftEvaluator:
 
     def evaluate(self, landmarks):
         feedback = []
+        mp_pose = mp.solutions.pose
 
         # Get coordinates
         left_hip = [
@@ -151,6 +157,7 @@ class BenchPressEvaluator:
 
     def evaluate(self, landmarks):
         feedback = []
+        mp_pose = mp.solutions.pose
 
         # Get coordinates
         left_shoulder = [
@@ -191,6 +198,7 @@ class PushUpEvaluator:
 
     def evaluate(self, landmarks):
         feedback = []
+        mp_pose = mp.solutions.pose
 
         # Get coordinates
         left_shoulder = [
@@ -218,12 +226,16 @@ class PushUpEvaluator:
         return feedback if feedback else ["Good push-up form!"]
 
 
-class LatPulldownEvaluator:
+class BicepCurlEvaluator:
     def __init__(self):
-        self.elbow_angle_range = (80, 120)
+        # Define the ideal range for elbow angles during a bicep curl
+        self.elbow_angle_min = 70  # Minimum angle at the bottom of the curl
+        self.elbow_angle_max = 160  # Maximum angle at the top of the curl
 
     def calculate_angle(self, a, b, c):
-        # Same as in SquatEvaluator
+        """
+        Calculate the angle at point b given three points a, b, and c.
+        """
         a = np.array(a)
         b = np.array(b)
         c = np.array(c)
@@ -237,8 +249,9 @@ class LatPulldownEvaluator:
 
     def evaluate(self, landmarks):
         feedback = []
+        mp_pose = mp.solutions.pose
 
-        # Get coordinates
+        # Get coordinates for left arm
         left_shoulder = [
             landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
             landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y,
@@ -252,104 +265,36 @@ class LatPulldownEvaluator:
             landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y,
         ]
 
-        # Calculate elbow angle
-        elbow_angle = self.calculate_angle(left_shoulder, left_elbow, left_wrist)
+        # Get coordinates for right arm
+        right_shoulder = [
+            landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x,
+            landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y,
+        ]
+        right_elbow = [
+            landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x,
+            landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y,
+        ]
+        right_wrist = [
+            landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].x,
+            landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y,
+        ]
 
-        # Evaluate elbow angle
-        if not (self.elbow_angle_range[0] <= elbow_angle <= self.elbow_angle_range[1]):
-            feedback.append(
-                f"Elbow angle ({elbow_angle:.1f}°) indicates improper form."
-            )
-
-        return feedback if feedback else ["Good lat pulldown form!"]
-
-
-evaluators = {
-    "squat": SquatEvaluator(),
-    "deadlift": DeadliftEvaluator(),
-    "bench press": BenchPressEvaluator(),
-    "push-up": PushUpEvaluator(),
-    "lat pulldown": LatPulldownEvaluator(),
-}
-
-cap = cv2.VideoCapture(0)  # Open the webcam
-
-sequence_length = 30  # Adjust as per your training
-sequence_buffer = []
-
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-
-    # Flip the frame horizontally for a selfie-view display
-    frame = cv2.flip(frame, 1)
-    image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Process the image and find pose landmarks
-    results = pose.process(image_rgb)
-
-    if results.pose_landmarks:
-        mp_drawing.draw_landmarks(
-            frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS
+        # Calculate angles for both arms
+        left_elbow_angle = self.calculate_angle(left_shoulder, left_elbow, left_wrist)
+        right_elbow_angle = self.calculate_angle(
+            right_shoulder, right_elbow, right_wrist
         )
 
-        keypoints = extract_keypoints(results.pose_landmarks)
-        sequence_buffer.append(keypoints)
-
-        if len(sequence_buffer) == sequence_length:
-            # Prepare the sequence
-            sequence = preprocess_sequence(sequence_buffer)
-            sequence = np.expand_dims(sequence, axis=0)
-            sequence = torch.tensor(sequence, dtype=torch.float32).to(device)
-
-            # Make prediction
-            with torch.no_grad():
-                outputs = model(sequence)
-                probabilities = torch.softmax(outputs, dim=1)
-                predicted_class_idx = torch.argmax(probabilities, dim=1).item()
-                confidence = probabilities[0][predicted_class_idx].item()
-
-            # Get predicted exercise name
-            predicted_exercise = class_names[predicted_class_idx]
-
-            # Evaluate correctness
-            evaluator = evaluators[predicted_exercise]
-            feedback = evaluator.evaluate(results.pose_landmarks.landmark)
-
-            # Display feedback
-            feedback_text = "; ".join(feedback)
-            cv2.putText(
-                frame,
-                f"{predicted_exercise.capitalize()} ({confidence:.2f})",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 0),
-                2,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                frame,
-                feedback_text,
-                (10, 70),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 0, 255),
-                2,
-                cv2.LINE_AA,
+        # Evaluate left elbow angle
+        if not (self.elbow_angle_min <= left_elbow_angle <= self.elbow_angle_max):
+            feedback.append(
+                f"Left elbow angle ({left_elbow_angle:.1f}°) is out of ideal range."
             )
 
-            # Maintain sequence buffer
-            sequence_buffer.pop(0)
-    else:
-        # Clear buffer if no pose is detected
-        sequence_buffer = []
+        # Evaluate right elbow angle
+        if not (self.elbow_angle_min <= right_elbow_angle <= self.elbow_angle_max):
+            feedback.append(
+                f"Right elbow angle ({right_elbow_angle:.1f}°) is out of ideal range."
+            )
 
-    cv2.imshow("Exercise Evaluation", frame)
-
-    if cv2.waitKey(10) & 0xFF == ord("q"):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
+        return feedback if feedback else ["Good bicep curl form!"]
