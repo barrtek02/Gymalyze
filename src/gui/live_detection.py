@@ -18,11 +18,13 @@ from src.utils.exercise_evaluators import (
     PushUpEvaluator,
     BicepCurlEvaluator,
 )
+from src.utils.sequence_comparator import SequenceComparator
 
 
 class LiveDetectionScreen(tk.Frame):
     def __init__(self, parent: tk.Tk, controller: tk.Tk) -> None:
         super().__init__(parent)
+        self.current_similarity = None
         self.process_thread = None
         self.fps: FPS | None = None
         self.vs: WebcamVideoStream | None = None
@@ -65,6 +67,30 @@ class LiveDetectionScreen(tk.Frame):
             "deadlift": DeadliftEvaluator(),
             "push_up": PushUpEvaluator(),
         }
+        import numpy as np
+
+        # Load the dataset and labels
+        dataset = np.load(
+            r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\landmarks_data.npy",
+            allow_pickle=True,
+        )
+        labels = np.load(
+            r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\labels_data.npy",
+            allow_pickle=True,
+        )
+
+        label_to_exercise = {
+            0: "bench_press",
+            1: "bicep_curl",
+            2: "squat",
+            3: "deadlift",
+            4: "push_up",
+            # Add more mappings as necessary
+        }
+
+        self.sequence_comparator = SequenceComparator(
+            dataset, labels, label_to_exercise
+        )
 
     def on_show(self) -> None:
         """Start the webcam feed and update the frames."""
@@ -104,23 +130,58 @@ class LiveDetectionScreen(tk.Frame):
                     )
 
                     if len(self.sliding_window) == self.sliding_window_size:
+                        sequence = np.array(
+                            self.video_processor.format_landmarks(self.sliding_window)
+                        )
                         self.current_prediction, self.current_probability = (
-                            self.classify_sliding_window()
+                            self.classify_sliding_window(sequence)
                         )
                         self.repetition_counter.track_phases(
                             self.sliding_window, self.current_prediction
                         )
-                        self.sliding_window.pop(0)
+                        if self.frame_count % 30 == 0:
 
-                        # Evaluate correctness if prediction is recognized
-                        exercise_key = self.current_prediction.lower()
-                        if exercise_key in self.evaluators:
-                            evaluator = self.evaluators[exercise_key]
-                            self.current_feedback = evaluator.evaluate(
-                                pose_landmarks_raw.landmark
+                            # Evaluate correctness if prediction is recognized
+                            exercise_key = self.current_prediction.lower()
+                            if exercise_key in self.evaluators:
+                                evaluator = self.evaluators[exercise_key]
+                                self.current_feedback = evaluator.evaluate(
+                                    pose_landmarks_raw.landmark
+                                )
+                            else:
+                                self.current_feedback = ["Good form!"]
+                            print(self.frame_count)
+                            average_similarity = self.sequence_comparator.compare(
+                                sequence,
+                                self.current_prediction.lower(),
                             )
-                        else:
-                            self.current_feedback = ["Good form!"]
+                            self.current_similarity = average_similarity
+                            self.generate_feedback()
+                        self.sliding_window.pop(0)
+            self.frame_count += 1
+
+    def generate_feedback(self):
+        """
+        Generate feedback based on the average cosine similarity.
+        """
+        threshold_excellent = 0.95  # Define a threshold for excellent form
+        threshold_good = 0.9  # Define a threshold for good form
+
+        feedback = []
+        if self.current_similarity >= threshold_excellent:
+            feedback.append(
+                f"Excellent form! Score {round(self.current_similarity, 2)}"
+            )
+        elif self.current_similarity >= threshold_good:
+            feedback.append(
+                f"Good form, slight adjustments needed. Score {round(self.current_similarity, 2)}"
+            )
+        else:
+            feedback.append(
+                f"Poor form, please correct your posture. Score {round(self.current_similarity, 2)}"
+            )
+
+        self.current_feedback.extend(feedback)
 
     def update_frame(self) -> None:
         """Update the video feed frame."""
@@ -204,11 +265,8 @@ class LiveDetectionScreen(tk.Frame):
         # Call update_frame again after 10 ms
         self.after(10, self.update_frame)
 
-    def classify_sliding_window(
-        self,
-    ) -> tuple[str, np.ndarray]:
+    def classify_sliding_window(self, sequence: np.ndarray) -> tuple[str, np.ndarray]:
         """Classify the current sliding window."""
-        sequence = np.array(self.video_processor.format_landmarks(self.sliding_window))
 
         if self.controller.classification_model is None:
             raise ValueError("Model is None, ensure the model is loaded correctly!")
