@@ -38,15 +38,44 @@ class LiveDetectionScreen(tk.Frame):
         self.current_probability = 0.0
         self.current_landmarks = None
         self.frame_count = 0
-        self.current_feedback = ["No Feedback"]
+        self.current_feedback = [
+            ("Angle Correctness", ["No Feedback"]),
+            ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
+        ]
+        # Configure grid layout with a 3x3 grid
+        for i in range(3):
+            self.grid_columnconfigure(i, weight=1)
+            self.grid_rowconfigure(i, weight=1)
 
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        # Create a label for the video feed
+        # Center cell (1,1) for the video feed
         self.video_label = Label(self)
-        self.video_label.grid(row=0, column=0, padx=10, pady=10)
+        self.video_label.grid(row=1, column=1, padx=10, pady=10, sticky="n")
 
+        # Left label for displaying numeric information in cell (1,0)
+        self.left_label = Label(
+            self,
+            text="",
+            justify="center",
+            font=("Helvetica", 18),
+            width=30,
+            wraplength=250,
+            anchor="center",
+        )
+        self.left_label.grid(row=1, column=0, padx=10, pady=10, sticky="n")
+
+        # Right label for displaying feedback in cell (1,2)
+        self.right_label = Label(
+            self,
+            text="",
+            justify="center",
+            font=("Helvetica", 18),
+            width=30,
+            wraplength=250,
+            anchor="center",
+        )
+        self.right_label.grid(row=1, column=2, padx=10, pady=10, sticky="n")
+
+        # Bottom-center cell (2,1) for the exit button
         exit_button = tk.Button(
             self,
             text="Exit Detection",
@@ -54,7 +83,7 @@ class LiveDetectionScreen(tk.Frame):
             width=30,
             height=2,
         )
-        exit_button.grid(row=1, column=0, padx=20, pady=20, sticky="nsew")
+        exit_button.grid(row=2, column=1, padx=20, pady=20, sticky="nsew")
 
         # Thread control variables
         self.stop_event = threading.Event()
@@ -67,7 +96,6 @@ class LiveDetectionScreen(tk.Frame):
             "deadlift": DeadliftEvaluator(),
             "push_up": PushUpEvaluator(),
         }
-        import numpy as np
 
         # Load the dataset and labels
         dataset = np.load(
@@ -85,7 +113,6 @@ class LiveDetectionScreen(tk.Frame):
             2: "squat",
             3: "deadlift",
             4: "push_up",
-            # Add more mappings as necessary
         }
 
         self.sequence_comparator = SequenceComparator(
@@ -96,11 +123,13 @@ class LiveDetectionScreen(tk.Frame):
         """Start the webcam feed and update the frames."""
         self.stop_event.clear()  # Reset the stop event before starting the new thread
 
-        self.current_prediction = "No Prediction"  # Default value
+        self.current_prediction = "No Prediction"
         self.current_probability = 0.0
         self.sliding_window = []
-        self.current_feedback = ["No Feedback"]
-
+        self.current_feedback = [
+            ("Angle Correctness", ["No Feedback"]),
+            ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
+        ]
         self.vs = WebcamVideoStream().start()
         self.fps = FPS().start()
         self.pose_estimator = PoseEstimator()
@@ -115,7 +144,6 @@ class LiveDetectionScreen(tk.Frame):
 
     def process_frames(self) -> None:
         """Thread function to process video frames in the background."""
-
         while not self.stop_event.is_set():
             if self.vs:
                 frame = self.vs.read()
@@ -145,12 +173,12 @@ class LiveDetectionScreen(tk.Frame):
                             exercise_key = self.current_prediction.lower()
                             if exercise_key in self.evaluators:
                                 evaluator = self.evaluators[exercise_key]
-                                self.current_feedback = evaluator.evaluate(
+                                self.evaluator_feedback = evaluator.evaluate(
                                     pose_landmarks_raw.landmark
                                 )
                             else:
-                                self.current_feedback = ["Good form!"]
-                            print(self.frame_count)
+                                self.evaluator_feedback = ["Good form!"]
+
                             average_similarity = self.sequence_comparator.compare(
                                 sequence,
                                 self.current_prediction.lower(),
@@ -158,30 +186,50 @@ class LiveDetectionScreen(tk.Frame):
                             self.current_similarity = average_similarity
                             self.generate_feedback()
                         self.sliding_window.pop(0)
-            self.frame_count += 1
+                self.frame_count += 1
 
     def generate_feedback(self):
         """
-        Generate feedback based on the average cosine similarity.
+        Generates feedback based on the similarity score and updates self.current_feedback.
         """
-        threshold_excellent = 0.95  # Define a threshold for excellent form
-        threshold_good = 0.9  # Define a threshold for good form
+        threshold_excellent = 0.9
+        threshold_very_good = 0.85
+        threshold_good = 0.8
+        threshold_wrong = 0.7
 
-        feedback = []
-        if self.current_similarity >= threshold_excellent:
-            feedback.append(
-                f"Excellent form! Score {round(self.current_similarity, 2)}"
-            )
-        elif self.current_similarity >= threshold_good:
-            feedback.append(
-                f"Good form, slight adjustments needed. Score {round(self.current_similarity, 2)}"
-            )
+        # Clear existing feedback
+        self.current_feedback = []
+
+        # Angle correctness feedbacks
+        angle_feedback = (
+            self.evaluator_feedback if hasattr(self, "evaluator_feedback") else []
+        )
+
+        # Pose correctness feedbacks
+        if self.current_similarity is not None:
+            score = f"Score: {round(self.current_similarity, 2)}"
         else:
-            feedback.append(
-                f"Poor form, please correct your posture. Score {round(self.current_similarity, 2)}"
-            )
+            score = "Score: N/A"
 
-        self.current_feedback.extend(feedback)
+        if self.current_similarity is not None:
+            if self.current_similarity >= threshold_excellent:
+                qualitative_feedback = "Perfect"
+            elif self.current_similarity >= threshold_very_good:
+                qualitative_feedback = "Very Good"
+            elif self.current_similarity >= threshold_good:
+                qualitative_feedback = "Good"
+            elif self.current_similarity >= threshold_wrong:
+                qualitative_feedback = "Wrong"
+            else:
+                qualitative_feedback = "Horrible"
+        else:
+            qualitative_feedback = "No Prediction"
+
+        pose_feedback = [score, qualitative_feedback]
+
+        # Set feedback sections
+        self.current_feedback.append(("Angle Correctness", angle_feedback))
+        self.current_feedback.append(("Pose Correctness", pose_feedback))
 
     def update_frame(self) -> None:
         """Update the video feed frame."""
@@ -190,79 +238,55 @@ class LiveDetectionScreen(tk.Frame):
 
         frame = self.vs.read()
         self.pose_estimator.draw_pose(frame, self.current_landmarks)
-        if frame is None:
+        if frame is None or self.fps is None:
             return
 
-        if self.fps is None:
-            return
-
-        # Update FPS counter
         self.fps.update()
 
-        # Add the FPS text
-        fps_text = f"FPS: {int(self.fps.fps())}"
-        cv2.putText(
-            frame, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2
+        # Collect left side information
+        # Format prediction text with desired layout
+        prediction_name = self.current_prediction.replace("_", " ").title()
+        prediction_text = (
+            f"FPS: {int(self.fps.fps())}\n\n"
+            f"Prediction:\n"
+            f"{prediction_name} ({round(self.current_probability, 2)}%)\n\n"
+            f"Repetitions:\n"
+            f"{self.repetition_counter.get_repetition_count(self.current_prediction)}"
         )
 
-        # Add the prediction text
-        prediction_text = f"Prediction: {self.current_prediction} ({round(self.current_probability, 2)}%)"
-        cv2.putText(
-            frame,
-            prediction_text,
-            (10, 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (0, 255, 0),
-            2,
-        )
+        # Update left label with formatted text
+        self.left_label.config(text=prediction_text, font=("Helvetica", 18))
 
-        # Display repetition count
-        if self.current_prediction != "No Prediction":
-            repetition_count = self.repetition_counter.get_repetition_count(
-                self.current_prediction
-            )
-            repetition_text = f"{self.current_prediction.capitalize()} Repetitions: {repetition_count}"
-            cv2.putText(
-                frame,
-                repetition_text,
-                (10, 90),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 0),
-                2,
-            )
+        # Ensure self.current_feedback is in the correct format
+        if not self.current_feedback or not isinstance(self.current_feedback[0], tuple):
+            self.current_feedback = [
+                ("Angle Correctness", ["No Feedback"]),
+                ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
+            ]
 
-        # Display feedback messages
-        if self.current_feedback and self.current_feedback != ["Good form!"]:
-            y_offset = 120  # Starting y-coordinate for feedback
-            for idx, feedback_msg in enumerate(self.current_feedback):
-                feedback_text = f"Feedback {idx + 1}: {feedback_msg}"
-                cv2.putText(
-                    frame,
-                    feedback_text,
-                    (10, y_offset + idx * 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 0, 255),
-                    2,
-                    cv2.LINE_AA,
-                )
+        # Format right-side feedback messages for readability with sections
+        right_text = ""
+        for section, messages in self.current_feedback:
+            right_text += f"{section}:\n"
+            for msg in messages:
+                right_text += f" - {msg}\n"
+            right_text += "\n"  # Add space between sections
 
-        # Convert frame to RGB (OpenCV uses BGR by default)
+        # Update right label with feedback text
+        self.right_label.config(text=right_text.strip(), font=("Helvetica", 18))
+
+        # Convert frame to RGB and display
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Convert the image to PIL format
-        img = Image.fromarray(frame_rgb)
-
-        # Convert the PIL image to ImageTk format
+        # Resize the frame to make the camera view larger
+        desired_width = 800  # Set your desired width
+        desired_height = 600  # Set your desired height
+        frame_resized = cv2.resize(frame_rgb, (desired_width, desired_height))
+        img = Image.fromarray(frame_resized)
         img_tk = ImageTk.PhotoImage(image=img)
-
-        # Update the video label with the new frame
         self.video_label.imgtk = img_tk
         self.video_label.config(image=img_tk)
 
-        # Call update_frame again after 10 ms
+        # Schedule the next update
         self.after(10, self.update_frame)
 
     def classify_sliding_window(self, sequence: np.ndarray) -> tuple[str, np.ndarray]:

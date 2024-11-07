@@ -55,17 +55,15 @@ class SquatEvaluator:
 
         # Evaluate knee angle
         if not (self.knee_angle_range[0] <= knee_angle <= self.knee_angle_range[1]):
-            feedback.append(f"Knee angle ({knee_angle:.1f}°) is out of ideal range.")
+            feedback.append(f"Knee: {knee_angle:.1f}°\n(out of ideal range)")
 
         # Evaluate hip angle
         if not (self.hip_angle_range[0] <= hip_angle <= self.hip_angle_range[1]):
-            feedback.append(f"Hip angle ({hip_angle:.1f}°) is out of ideal range.")
+            feedback.append(f"Hip: {hip_angle:.1f}°\n(out of ideal range)")
 
         # Evaluate back angle
         if not (self.back_angle_range[0] <= back_angle <= self.back_angle_range[1]):
-            feedback.append(
-                f"Back angle ({back_angle:.1f}°) indicates improper posture."
-            )
+            feedback.append(f"Back: {back_angle:.1f}°\n(improper posture)")
 
         return feedback if feedback else ["Good squat form!"]
 
@@ -120,18 +118,16 @@ class DeadliftEvaluator:
 
         # Evaluate back angle
         if not (self.back_angle_range[0] <= back_angle <= self.back_angle_range[1]):
-            feedback.append(
-                f"Back angle ({back_angle:.1f}°) indicates rounding. Keep your back straight."
-            )
+            feedback.append(f"Back: {back_angle:.1f}°\n(indicates rounding)")
 
         # Evaluate hip angle
         if not (self.hip_angle_range[0] <= hip_angle <= self.hip_angle_range[1]):
-            feedback.append(f"Hip angle ({hip_angle:.1f}°) is out of ideal range.")
+            feedback.append(f"Hip: {hip_angle:.1f}°\n(out of ideal range)")
 
         # Evaluate knee angle
         if not (self.knee_angle_range[0] <= knee_angle <= self.knee_angle_range[1]):
             feedback.append(
-                f"Knee angle ({knee_angle:.1f}°) should be closer to 180°. Don't bend your knees too much."
+                f"Knee: {knee_angle:.1f}°\n(don't bend your knees too much)"
             )
 
         return feedback if feedback else ["Good deadlift form!"]
@@ -178,16 +174,12 @@ class BenchPressEvaluator:
 
         # Evaluate elbow angle
         if not (self.elbow_angle_range[0] <= elbow_angle <= self.elbow_angle_range[1]):
-            feedback.append(
-                f"Elbow angle ({elbow_angle:.1f}°) indicates improper form."
-            )
+            feedback.append(f"Elbow: {elbow_angle:.1f}°\n(improper form)")
 
         # Evaluate wrist alignment
         wrist_elbow_diff = abs(left_wrist[0] - left_elbow[0])
         if wrist_elbow_diff > self.wrist_elbow_alignment_tolerance:
-            feedback.append(
-                "Wrist is not aligned with elbow. Keep your wrists straight."
-            )
+            feedback.append("Wrist is not aligned with elbow")
 
         return feedback if feedback else ["Good bench press form!"]
 
@@ -219,9 +211,7 @@ class PushUpEvaluator:
         hip_ankle_diff = abs(left_hip[1] - left_ankle[1])
 
         if abs(shoulder_hip_diff - hip_ankle_diff) > self.body_alignment_tolerance:
-            feedback.append(
-                "Body is not in a straight line. Keep your hips aligned with your shoulders and ankles."
-            )
+            feedback.append("Body alignment is off")
 
         return feedback if feedback else ["Good push-up form!"]
 
@@ -288,13 +278,13 @@ class BicepCurlEvaluator:
         # Evaluate left elbow angle
         if not (self.elbow_angle_min <= left_elbow_angle <= self.elbow_angle_max):
             feedback.append(
-                f"Left elbow angle ({left_elbow_angle:.1f}°) is out of ideal range."
+                f"Left Elbow: {left_elbow_angle:.1f}°\n(out of ideal range)"
             )
 
         # Evaluate right elbow angle
         if not (self.elbow_angle_min <= right_elbow_angle <= self.elbow_angle_max):
             feedback.append(
-                f"Right elbow angle ({right_elbow_angle:.1f}°) is out of ideal range."
+                f"Right Elbow: {right_elbow_angle:.1f}°\n(out of ideal range)"
             )
 
         return feedback if feedback else ["Good bicep curl form!"]

@@ -99,7 +99,6 @@ class SequenceComparator:
         user_flat = user_sequence.flatten().reshape(1, -1)
         sample_flat = aligned_sample_sequence.flatten().reshape(1, -1)
         similarity = cosine_similarity(user_flat, sample_flat)[0][0]
-        print(f"Computed cosine similarity: {similarity}")
         return similarity
 
     def compare(self, user_sequence: np.ndarray, exercise_name: str) -> float:
@@ -133,5 +132,4 @@ class SequenceComparator:
             similarities.append(similarity)
 
         average_similarity = np.mean(similarities) if similarities else 0.0
-        print("------------------------", average_similarity)
         return average_similarity
