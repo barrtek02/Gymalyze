@@ -52,13 +52,3 @@ class HomeScreen(tk.Frame):
             width=20,
         )
         upload_button.grid(row=0, column=1, padx=10, pady=10)
-
-        # Logout button at the bottom
-        logout_button = ttk.Button(
-            self,
-            text="Logout",
-            style="TButton",
-            command=lambda: controller.show_frame("LoginScreen"),
-            width=30,
-        )
-        logout_button.grid(row=3, column=0, pady=30)

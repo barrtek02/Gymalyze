@@ -5,12 +5,10 @@ from tkinter import messagebox
 import sv_ttk
 import torch
 
-from gui.login_screen import LoginScreen
 from gui.home_screen import HomeScreen
 from gui.live_detection import LiveDetectionScreen
 from gui.train_exercise import TrainSpecificScreen
 from gui.upload_review import UploadVideoScreen
-from gui.sign_up_screen import SignUpScreen
 from src.models.lstm import ExerciseLSTM
 from utils.database import Database
 import os
@@ -35,8 +33,8 @@ class BodybuildingApp(tk.Tk):
         self.frames: dict[str, ttk.Frame] = {}
         self.create_frames()
 
-        # Start by showing the login screen
-        self.show_frame("LoginScreen")
+        # Start by showing the home screen
+        self.show_frame("HomeScreen")
 
         sv_ttk.set_theme("dark")
         self.bind("<Configure>", self.on_resize)
@@ -66,12 +64,10 @@ class BodybuildingApp(tk.Tk):
     def create_frames(self) -> None:
         """Initialize and store all frames in a dictionary for easy access."""
         for F in (
-            LoginScreen,
             HomeScreen,
             LiveDetectionScreen,
             TrainSpecificScreen,
             UploadVideoScreen,
-            SignUpScreen,
         ):
             frame = F(parent=self.container, controller=self)
             frame_name = F.__name__
