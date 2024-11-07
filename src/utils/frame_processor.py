@@ -1,8 +1,10 @@
 import threading
+import time
 from datetime import timedelta
 
 import cv2
 import numpy as np
+from imutils.video import FileVideoStream
 
 from src.utils.pose_estimator import PoseEstimator
 from src.utils.repetition_counter import RepetitionCounter
@@ -248,8 +250,10 @@ class FrameProcessor:
 
     def process_uploaded_video(self, video_path: str):
         """Process the uploaded video for exercise classification with timestamps."""
-        cap = cv2.VideoCapture(video_path)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        fvs = FileVideoStream(video_path).start()
+        time.sleep(1.0)  # Allow buffer to fill
+
+        fps = fvs.stream.get(cv2.CAP_PROP_FPS)
         frame_count = 0
         sliding_window = []
         sliding_window_size = 50
@@ -262,14 +266,17 @@ class FrameProcessor:
 
         pose_estimator = PoseEstimator()
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
+        while fvs.running():
+            if not fvs.more():
+                time.sleep(0.1)
+                continue
+
+            frame = fvs.read()
+            if frame is None:
                 break
 
             # Process every nth frame (for example, every 4th frame)
             if frame_count % 4 == 0:
-
                 pose_landmarks_raw = pose_estimator.estimate_pose(frame)
                 if pose_landmarks_raw:
                     pose_landmarks = self.video_processor.process_pose_landmarks(
@@ -319,7 +326,7 @@ class FrameProcessor:
                 current_exercise, start_time, end_time, avg_confidence, analysis_results
             )
 
-        cap.release()
+        fvs.stop()
 
         return analysis_results  # Return the analysis results
 
