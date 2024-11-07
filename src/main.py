@@ -9,6 +9,7 @@ from gui.home_screen import HomeScreen
 from gui.live_detection import LiveDetectionScreen
 from gui.train_exercise import TrainSpecificScreen
 from gui.upload_review import UploadVideoScreen
+from src.gui.exercise_library_screen import ExerciseLibraryScreen
 from src.models.lstm import ExerciseLSTM
 from utils.database import Database
 import os
@@ -68,6 +69,7 @@ class BodybuildingApp(tk.Tk):
             LiveDetectionScreen,
             TrainSpecificScreen,
             UploadVideoScreen,
+            ExerciseLibraryScreen,
         ):
             frame = F(parent=self.container, controller=self)
             frame_name = F.__name__
