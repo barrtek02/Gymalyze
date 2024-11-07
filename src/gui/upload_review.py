@@ -15,7 +15,7 @@ class UploadVideoScreen(tk.Frame):
         self.grid_rowconfigure(0, weight=1)
 
         # Text area to display results
-        self.result_text = Text(self, height=20, width=80)
+        self.result_text = Text(self, height=30, width=100)
         self.result_text.grid(row=1, column=0, padx=10, pady=10)
 
         # Button to upload video
@@ -32,13 +32,16 @@ class UploadVideoScreen(tk.Frame):
 
         if file_path:
             # Use FrameProcessor to process the video
-            analysis_results = self.frame_processor.process_uploaded_video(file_path)
+            analysis_results, feedback_results = self.frame_processor.process_uploaded_video(file_path)
             # Display results in the text area
-            self.display_analysis(analysis_results)
+            self.display_analysis(analysis_results, feedback_results)
 
-    def display_analysis(self, analysis_results: list[dict]) -> None:
-        """Display the analysis results in the text area."""
+    def display_analysis(self, analysis_results: list[dict], feedback_results: list[dict]) -> None:
+        """Display the analysis results and feedback in the text area."""
         self.result_text.delete(1.0, tk.END)  # Clear previous results
+
+        # Display exercise analysis
+        self.result_text.insert(tk.END, "Exercise Analysis:\n")
         for result in analysis_results:
             display_text = (
                 f"Exercise: {result['exercise']}\n"
@@ -46,4 +49,20 @@ class UploadVideoScreen(tk.Frame):
                 f"End Time: {result['end_time']}\n"
                 f"Average Confidence: {result['confidence']}%\n\n"
             )
+            self.result_text.insert(tk.END, display_text)
+
+        # Display feedback
+        self.result_text.insert(tk.END, "\nDetailed Feedback:\n")
+        for feedback in feedback_results:
+            display_text = (
+                f"Timestamp: {feedback['timestamp']}\n"
+                f"Exercise: {feedback['exercise']}\n"
+                f"Angle Correctness:\n"
+            )
+            for angle_msg in feedback['angle_feedback']:
+                display_text += f" - {angle_msg}\n"
+            display_text += "Pose Correctness:\n"
+            for pose_msg in feedback['pose_feedback']:
+                display_text += f" - {pose_msg}\n"
+            display_text += "\n"
             self.result_text.insert(tk.END, display_text)

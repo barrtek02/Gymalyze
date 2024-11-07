@@ -249,7 +249,8 @@ class FrameProcessor:
         return data
 
     def process_uploaded_video(self, video_path: str):
-        """Process the uploaded video for exercise classification with timestamps."""
+        """Process the uploaded video for exercise classification with timestamps and feedback."""
+        # Use FileVideoStream instead of cv2.VideoCapture
         fvs = FileVideoStream(video_path).start()
         time.sleep(1.0)  # Allow buffer to fill
 
@@ -258,6 +259,7 @@ class FrameProcessor:
         sliding_window = []
         sliding_window_size = 50
         analysis_results = []
+        feedback_results = []
 
         # Initialize variables for time tracking
         current_exercise = None
@@ -265,6 +267,11 @@ class FrameProcessor:
         confidences = []
 
         pose_estimator = PoseEstimator()
+
+        # Variables to track the last feedback messages
+        last_angle_feedback = None
+        last_pose_feedback = None
+        last_feedback_time = -1  # Start before the beginning of the video
 
         while fvs.running():
             if not fvs.more():
@@ -275,7 +282,7 @@ class FrameProcessor:
             if frame is None:
                 break
 
-            # Process every nth frame (for example, every 4th frame)
+            # Process every nth frame (e.g., every 4th frame)
             if frame_count % 4 == 0:
                 pose_landmarks_raw = pose_estimator.estimate_pose(frame)
                 if pose_landmarks_raw:
@@ -297,8 +304,8 @@ class FrameProcessor:
 
                         # If the exercise has changed, save the previous exercise with timestamps
                         if (
-                            current_exercise is not None
-                            and current_exercise != exercise_class
+                                current_exercise is not None
+                                and current_exercise != exercise_class
                         ):
                             end_time = current_time
                             avg_confidence = np.mean(confidences)
@@ -316,6 +323,92 @@ class FrameProcessor:
                         current_exercise = exercise_class
                         sliding_window.pop(0)
 
+                        current_prediction = self.video_processor.convert_index_to_exercise_name(exercise_class)
+
+                        # Evaluate angle correctness
+                        if current_prediction.lower() in self.evaluators:
+                            evaluator = self.evaluators[current_prediction.lower()]
+                            angle_feedback = evaluator.evaluate(pose_landmarks_raw.landmark)
+                        else:
+                            angle_feedback = ["Good form!"]
+
+                        # Compute similarity
+                        average_similarity = self.sequence_comparator.compare(
+                            sequence,
+                            current_prediction.lower(),
+                        )
+                        current_similarity = average_similarity
+
+                        # Generate pose feedback
+                        threshold_excellent = 0.9
+                        threshold_very_good = 0.85
+                        threshold_good = 0.8
+                        threshold_wrong = 0.7
+
+                        if current_similarity is not None:
+                            score = f"Score: {round(current_similarity, 2)}"
+                        else:
+                            score = "Score: N/A"
+
+                        if current_similarity is not None:
+                            if current_similarity >= threshold_excellent:
+                                qualitative_feedback = "Perfect"
+                            elif current_similarity >= threshold_very_good:
+                                qualitative_feedback = "Very Good"
+                            elif current_similarity >= threshold_good:
+                                qualitative_feedback = "Good"
+                            elif current_similarity >= threshold_wrong:
+                                qualitative_feedback = "Wrong"
+                            else:
+                                qualitative_feedback = "Horrible"
+                        else:
+                            qualitative_feedback = "No Prediction"
+
+                        pose_feedback = [score, qualitative_feedback]
+
+                        # Decide whether to record the feedback based on changes and time limit
+
+                        # Check if at least one second has passed since the last feedback
+                        if int(current_time) - int(last_feedback_time) >= 1:
+                            last_feedback_time = int(current_time)
+
+                            # For angle feedback, show every event when feedback angle is wrong
+                            angle_feedback_changed = angle_feedback != last_angle_feedback
+
+                            # For pose feedback, show when it changes
+                            pose_feedback_changed = pose_feedback != last_pose_feedback
+
+                            # Determine if angle feedback indicates an issue
+                            angle_issue = angle_feedback != ["Good deadlift form!"] and angle_feedback != ["Good form!"]
+
+                            record_feedback = False
+
+                            # Record angle feedback if there's an issue or if it changed to good form
+                            if angle_issue:
+                                if angle_feedback_changed:
+                                    record_feedback = True
+                            else:
+                                if last_angle_feedback is not None and angle_feedback_changed:
+                                    record_feedback = True
+
+                            # Record pose feedback if it changed
+                            if pose_feedback_changed:
+                                record_feedback = True
+
+                            if record_feedback:
+                                # Record feedback with timestamp
+                                feedback_result = {
+                                    "timestamp": timedelta(seconds=int(current_time)),
+                                    "exercise": current_prediction,
+                                    "angle_feedback": angle_feedback,
+                                    "pose_feedback": pose_feedback,
+                                }
+                                feedback_results.append(feedback_result)
+
+                            # Update last feedback
+                            last_angle_feedback = angle_feedback
+                            last_pose_feedback = pose_feedback
+
             frame_count += 1
 
         # Handle the last exercise in the video
@@ -328,7 +421,8 @@ class FrameProcessor:
 
         fvs.stop()
 
-        return analysis_results  # Return the analysis results
+        return analysis_results, feedback_results
+
 
     def classify_sequence(self, sequence: np.ndarray) -> tuple[int, float]:
         """Classify a sequence of pose landmarks and return the predicted exercise and confidence."""
