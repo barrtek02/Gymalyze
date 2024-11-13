@@ -1,9 +1,11 @@
 import tkinter as tk
+from datetime import datetime
 from tkinter import PhotoImage
 from tkinter import ttk
 from tkinter import messagebox
 import sv_ttk
 import torch
+import time
 
 from gui.home_screen import HomeScreen
 from gui.live_detection import LiveDetectionScreen
@@ -18,6 +20,7 @@ import os
 class BodybuildingApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+        self.session_start_time = None
         self.device: torch.device | None = None
         self.icon_img: PhotoImage | None = None
         self.classification_model: ExerciseLSTM | None = None
@@ -25,6 +28,7 @@ class BodybuildingApp(tk.Tk):
         self.set_window_geometry()
         self.set_app_icon()
         self.db = Database()
+        self.current_session_id = None  # To keep track of the current session
 
         # Container for holding frames (screens)
         self.container: ttk.Frame = ttk.Frame(self)
@@ -120,6 +124,24 @@ class BodybuildingApp(tk.Tk):
         """Optional: Handle resizing logic."""
         width = event.width
         height = event.height
+
+    def start_new_session(self):
+        """Start a new session and store the session ID."""
+        self.session_start_time = datetime.now()  # Record the session start time
+        self.current_session_id = self.db.insert_session(self.session_start_time, None)
+
+    def end_current_session(self):
+        """End the current session by calculating duration and updating the database."""
+        if self.session_start_time:
+            end_time = datetime.now()
+            duration = (end_time - self.session_start_time).total_seconds()
+            self.db.update_session_duration(self.current_session_id, duration)
+            self.session_start_time = None  # Reset session start time
+
+    def on_closing(self) -> None:
+        """When the app closes, close the database connection."""
+        self.db.close()
+        self.destroy()  # Destroy the Tkinter window
 
     def on_closing(self) -> None:
         """When the app closes, close the database connection."""

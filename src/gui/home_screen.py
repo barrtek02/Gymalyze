@@ -30,14 +30,14 @@ class HomeScreen(tk.Frame):
 
         assets_path = Path(os.path.dirname(__file__)).parent / "assets"
 
-        live_image = Image.open(assets_path / "live_detection.png").resize((300, 300))
+        live_image = Image.open(assets_path / "live_detection.jpg").resize((300, 300))
         live_photo = ImageTk.PhotoImage(live_image)
 
-        upload_image = Image.open(assets_path / "video_review.png").resize((300, 300))
+        upload_image = Image.open(assets_path / "upload_video.jpg").resize((300, 300))
         upload_photo = ImageTk.PhotoImage(upload_image)
 
-        library_image = Image.open(assets_path / "exercise library.png").resize(
-            (150, 150)
+        library_image = Image.open(assets_path / "database_view.jpg").resize(
+            (200, 200)
         )
         library_photo = ImageTk.PhotoImage(library_image)
 
