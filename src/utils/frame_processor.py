@@ -127,17 +127,14 @@ class FrameProcessor:
                         self.repetition_counter.track_phases(
                             self.sliding_window, self.current_prediction
                         )
-                        print(self.frame_count)
                         if self.frame_count % 30 == 0:
 
                             # Evaluate correctness using ExerciseEvaluator
-                            print(self.current_prediction.lower())
                             if (
                                 self.current_prediction.lower()
                                 in self.exercise_evaluator.angle_thresholds
                             ):
                                 input_data = np.array(self.sliding_window)
-                                print(input_data.shape)
                                 reconstructed_data = self.generate_reconstructed_data(
                                     input_data
                                 )
