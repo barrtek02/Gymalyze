@@ -1,22 +1,16 @@
+import logging
+from datetime import timedelta
 import threading
 import time
-from datetime import timedelta
-
 import cv2
 import numpy as np
+import torch
 from imutils.video import FileVideoStream
-
 from src.utils.pose_estimator import PoseEstimator
 from src.utils.repetition_counter import RepetitionCounter
 from src.utils.video_processor import VideoProcessor
 from src.utils.imutils.video import WebcamVideoStream, FPS
-from src.utils.exercise_evaluators import (
-    SquatEvaluator,
-    DeadliftEvaluator,
-    BenchPressEvaluator,
-    PushUpEvaluator,
-    BicepCurlEvaluator,
-)
+from src.utils.autoencoder_exercise_evaluator import ExerciseEvaluator
 from src.utils.sequence_comparator import SequenceComparator
 
 
@@ -36,22 +30,15 @@ class FrameProcessor:
         self.current_probability = 0.0
         self.current_landmarks = None
         self.frame_count = 0
-        self.current_feedback = [
-            ("Angle Correctness", ["No Feedback"]),
-            ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
-        ]
+        self.current_feedback = {
+            "score": None,
+            "details": [{"Feedback": "Exercise not recognized."}],
+        }
         # Thread control variables
         self.stop_event = threading.Event()
         self.process_thread = None
 
-        # Instantiate Evaluators
-        self.evaluators = {
-            "bench_press": BenchPressEvaluator(),
-            "bicep_curl": BicepCurlEvaluator(),
-            "squat": SquatEvaluator(),
-            "deadlift": DeadliftEvaluator(),
-            "push_up": PushUpEvaluator(),
-        }
+        self.exercise_evaluator = ExerciseEvaluator()
 
         # Load the dataset and labels
         dataset = np.load(
@@ -81,10 +68,10 @@ class FrameProcessor:
         self.current_prediction = "No Prediction"
         self.current_probability = 0.0
         self.sliding_window = []
-        self.current_feedback = [
-            ("Angle Correctness", ["No Feedback"]),
-            ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
-        ]
+        self.current_feedback = {
+            "score": None,
+            "details": [{"Feedback": "Exercise not recognized."}],
+        }
         self.vs = WebcamVideoStream().start()
         self.fps = FPS().start()
         self.pose_estimator = PoseEstimator()
@@ -140,73 +127,45 @@ class FrameProcessor:
                         self.repetition_counter.track_phases(
                             self.sliding_window, self.current_prediction
                         )
+                        print(self.frame_count)
                         if self.frame_count % 30 == 0:
 
-                            # Evaluate correctness if prediction is recognized
-                            exercise_key = self.current_prediction.lower()
-                            if exercise_key in self.evaluators:
-                                evaluator = self.evaluators[exercise_key]
-                                self.evaluator_feedback = evaluator.evaluate(
-                                    pose_landmarks_raw.landmark
+                            # Evaluate correctness using ExerciseEvaluator
+                            print(self.current_prediction.lower())
+                            if (
+                                self.current_prediction.lower()
+                                in self.exercise_evaluator.angle_thresholds
+                            ):
+                                input_data = np.array(self.sliding_window)
+                                print(input_data.shape)
+                                reconstructed_data = self.generate_reconstructed_data(
+                                    input_data
                                 )
+                                results_df, overall_error = (
+                                    self.exercise_evaluator.evaluate_exercise(
+                                        self.current_prediction.lower(),
+                                        input_data,
+                                        reconstructed_data,
+                                    )
+                                )
+                                exercise_score = 100 - overall_error
+                                self.current_feedback = {
+                                    "score": exercise_score,
+                                    "details": results_df.to_dict("records"),
+                                }
+                                self.current_similarity = overall_error
                             else:
-                                self.evaluator_feedback = ["Good form!"]
-
-                            average_similarity = self.sequence_comparator.compare(
-                                sequence,
-                                self.current_prediction.lower(),
-                            )
-                            self.current_similarity = average_similarity
-                            self.generate_feedback()
+                                self.current_feedback = {
+                                    "score": None,
+                                    "details": [
+                                        {"Feedback": "Exercise not recognized."}
+                                    ],
+                                }
                         self.sliding_window.pop(0)
                 self.frame_count += 1
 
-    def generate_feedback(self):
-        """
-        Generates feedback based on the similarity score and updates self.current_feedback.
-        """
-        threshold_excellent = 0.9
-        threshold_very_good = 0.85
-        threshold_good = 0.8
-        threshold_wrong = 0.7
-
-        # Clear existing feedback
-        self.current_feedback = []
-
-        # Angle correctness feedbacks
-        angle_feedback = (
-            self.evaluator_feedback if hasattr(self, "evaluator_feedback") else []
-        )
-
-        # Pose correctness feedbacks
-        if self.current_similarity is not None:
-            score = f"Score: {round(self.current_similarity, 2)}"
-        else:
-            score = "Score: N/A"
-
-        if self.current_similarity is not None:
-            if self.current_similarity >= threshold_excellent:
-                qualitative_feedback = "Perfect"
-            elif self.current_similarity >= threshold_very_good:
-                qualitative_feedback = "Very Good"
-            elif self.current_similarity >= threshold_good:
-                qualitative_feedback = "Good"
-            elif self.current_similarity >= threshold_wrong:
-                qualitative_feedback = "Wrong"
-            else:
-                qualitative_feedback = "Horrible"
-        else:
-            qualitative_feedback = "No Prediction"
-
-        pose_feedback = [score, qualitative_feedback]
-
-        # Set feedback sections
-        self.current_feedback.append(("Angle Correctness", angle_feedback))
-        self.current_feedback.append(("Pose Correctness", pose_feedback))
-
     def classify_sliding_window(self, sequence: np.ndarray) -> tuple[str, np.ndarray]:
         """Classify the current sliding window."""
-
         if self.controller.classification_model is None:
             raise ValueError("Model is None, ensure the model is loaded correctly!")
 
@@ -219,6 +178,45 @@ class FrameProcessor:
             self.video_processor.convert_index_to_exercise_name(max_prob_index),
             probabilities[max_prob_index] * 100,
         )
+
+    def generate_reconstructed_data(self, input_data: np.ndarray) -> np.ndarray:
+        """
+        Generates reconstructed data using the autoencoder.
+
+        Parameters:
+            input_data (np.ndarray): Input sequence of shape (frames, landmarks, features).
+                                     Expected shape: (50, 33, 4).
+
+        Returns:
+            np.ndarray: Reconstructed data of the same shape as input_data.
+        """
+        if self.controller.autoencoder is None:
+            raise ValueError("Autoencoder is not loaded!")
+
+        # Convert input_data to a torch tensor and add batch dimension
+        input_tensor = torch.tensor(input_data, dtype=torch.float32).to(
+            self.controller.device
+        )  # Shape: (50, 33, 4)
+
+        # Flatten the landmarks and features: [frames, landmarks * features]
+        flattened_input = input_tensor.view(
+            input_tensor.size(0), -1
+        )  # Shape: (50, 33 * 4)
+
+        # Add batch dimension: [1, frames, landmarks * features]
+        batched_input = flattened_input.unsqueeze(0)  # Shape: (1, 50, 33 * 4)
+
+        # Pass through the autoencoder
+        reconstructed_flat = (
+            self.controller.autoencoder(batched_input).squeeze(0).detach()
+        )  # Shape: (50, 33 * 4)
+
+        # Reshape back to the original dimensions: [frames, landmarks, features]
+        reconstructed_data = (
+            reconstructed_flat.view(flattened_input.size(0), 33, 4).cpu().numpy()
+        )  # Shape: (50, 33, 4)
+
+        return reconstructed_data
 
     def get_current_frame(self):
         """Return the current frame with pose drawn."""
@@ -249,8 +247,7 @@ class FrameProcessor:
         return data
 
     def process_uploaded_video(self, video_path: str):
-        """Process the uploaded video for exercise classification with timestamps and feedback."""
-        # Use FileVideoStream instead of cv2.VideoCapture
+        """Process the uploaded video for exercise classification, evaluation, and repetition counting."""
         fvs = FileVideoStream(video_path).start()
         time.sleep(1.0)  # Allow buffer to fill
 
@@ -260,18 +257,14 @@ class FrameProcessor:
         sliding_window_size = 50
         analysis_results = []
         feedback_results = []
+        recorded_feedback_by_timestamp = {}  # Tracks feedback messages by timestamp
 
-        # Initialize variables for time tracking
         current_exercise = None
         start_time = 0
         confidences = []
 
         pose_estimator = PoseEstimator()
-
-        # Variables to track the last feedback messages
-        last_angle_feedback = None
-        last_pose_feedback = None
-        last_feedback_time = -1  # Start before the beginning of the video
+        repetition_counter = RepetitionCounter()  # Initialize a new repetition counter
 
         while fvs.running():
             if not fvs.more():
@@ -282,8 +275,7 @@ class FrameProcessor:
             if frame is None:
                 break
 
-            # Process every nth frame (e.g., every 4th frame)
-            if frame_count % 4 == 0:
+            if frame_count % 4 == 0:  # Process every 4th frame
                 pose_landmarks_raw = pose_estimator.estimate_pose(frame)
                 if pose_landmarks_raw:
                     pose_landmarks = self.video_processor.process_pose_landmarks(
@@ -291,138 +283,151 @@ class FrameProcessor:
                     )
                     sliding_window.append(pose_landmarks)
 
-                    # If sliding window is full, classify the sequence
                     if len(sliding_window) == sliding_window_size:
                         sequence = np.array(
                             self.video_processor.format_landmarks(sliding_window)
                         )
+
+                        # Classify current exercise and update confidence
                         exercise_class, confidence = self.classify_sequence(sequence)
                         confidences.append(confidence)
+                        current_prediction = (
+                            self.video_processor.convert_index_to_exercise_name(
+                                exercise_class
+                            )
+                        )
 
-                        # Get the current time in the video
-                        current_time = frame_count / fps
+                        # Detect repetitions for the current exercise
+                        if current_prediction:
+                            repetition_counter.track_phases(
+                                sliding_window, current_prediction
+                            )
 
-                        # If the exercise has changed, save the previous exercise with timestamps
+                        current_time = int(
+                            frame_count / fps
+                        )  # Current timestamp (seconds)
+
+                        # Save the previous exercise when it changes
                         if (
-                                current_exercise is not None
-                                and current_exercise != exercise_class
+                            current_exercise is not None
+                            and current_exercise != current_prediction
                         ):
                             end_time = current_time
                             avg_confidence = np.mean(confidences)
+                            repetitions = repetition_counter.get_repetition_count(
+                                current_exercise
+                            )
                             self.add_analysis_result(
                                 current_exercise,
                                 start_time,
                                 end_time,
                                 avg_confidence,
                                 analysis_results,
+                                repetitions,
                             )
-                            confidences = []  # Reset confidence list
+                            confidences = []
                             start_time = current_time
 
-                        # Update current exercise
-                        current_exercise = exercise_class
+                            repetition_counter = (
+                                RepetitionCounter()
+                            )  # Reset the repetition counter
+
+                        current_exercise = (
+                            current_prediction  # Use the string name directly
+                        )
                         sliding_window.pop(0)
 
-                        current_prediction = self.video_processor.convert_index_to_exercise_name(exercise_class)
+                        # Evaluate the current exercise using the evaluator
+                        reconstructed_data = self.generate_reconstructed_data(sequence)
 
-                        # Evaluate angle correctness
-                        if current_prediction.lower() in self.evaluators:
-                            evaluator = self.evaluators[current_prediction.lower()]
-                            angle_feedback = evaluator.evaluate(pose_landmarks_raw.landmark)
-                        else:
-                            angle_feedback = ["Good form!"]
+                        try:
+                            frame_feedback, reconstruction_error = (
+                                self.exercise_evaluator.evaluate_exercise(
+                                    current_prediction, sequence, reconstructed_data
+                                )
+                            )
+                            overall_error = 100 - reconstruction_error
 
-                        # Compute similarity
-                        average_similarity = self.sequence_comparator.compare(
-                            sequence,
-                            current_prediction.lower(),
-                        )
-                        current_similarity = average_similarity
+                            filtered_feedback = []
+                            for feedback in frame_feedback.to_dict(orient="records"):
+                                if (
+                                    feedback["Deviation (degrees)"]
+                                    > feedback["Threshold (degrees)"]
+                                ):
+                                    feedback_message = feedback["Feedback"]
 
-                        # Generate pose feedback
-                        threshold_excellent = 0.9
-                        threshold_very_good = 0.85
-                        threshold_good = 0.8
-                        threshold_wrong = 0.7
+                                    # Ensure feedback is unique for the current timestamp
+                                    if (
+                                        current_time
+                                        not in recorded_feedback_by_timestamp
+                                    ):
+                                        recorded_feedback_by_timestamp[current_time] = (
+                                            set()
+                                        )
 
-                        if current_similarity is not None:
-                            score = f"Score: {round(current_similarity, 2)}"
-                        else:
-                            score = "Score: N/A"
+                                    if (
+                                        feedback_message
+                                        not in recorded_feedback_by_timestamp[
+                                            current_time
+                                        ]
+                                    ):
+                                        recorded_feedback_by_timestamp[
+                                            current_time
+                                        ].add(feedback_message)
+                                        filtered_feedback.append(
+                                            {
+                                                "Angle": feedback["Friendly Angle"],
+                                                "Input Angle": round(
+                                                    feedback["Input Angle (degrees)"], 1
+                                                ),
+                                                "Reconstructed Angle": round(
+                                                    feedback[
+                                                        "Reconstructed Angle (degrees)"
+                                                    ],
+                                                    1,
+                                                ),
+                                                "Threshold": round(
+                                                    feedback["Threshold (degrees)"], 1
+                                                ),
+                                                "Feedback": feedback_message,
+                                            }
+                                        )
 
-                        if current_similarity is not None:
-                            if current_similarity >= threshold_excellent:
-                                qualitative_feedback = "Perfect"
-                            elif current_similarity >= threshold_very_good:
-                                qualitative_feedback = "Very Good"
-                            elif current_similarity >= threshold_good:
-                                qualitative_feedback = "Good"
-                            elif current_similarity >= threshold_wrong:
-                                qualitative_feedback = "Wrong"
-                            else:
-                                qualitative_feedback = "Horrible"
-                        else:
-                            qualitative_feedback = "No Prediction"
-
-                        pose_feedback = [score, qualitative_feedback]
-
-                        # Decide whether to record the feedback based on changes and time limit
-
-                        # Check if at least one second has passed since the last feedback
-                        if int(current_time) - int(last_feedback_time) >= 1:
-                            last_feedback_time = int(current_time)
-
-                            # For angle feedback, show every event when feedback angle is wrong
-                            angle_feedback_changed = angle_feedback != last_angle_feedback
-
-                            # For pose feedback, show when it changes
-                            pose_feedback_changed = pose_feedback != last_pose_feedback
-
-                            # Determine if angle feedback indicates an issue
-                            angle_issue = angle_feedback != ["Good deadlift form!"] and angle_feedback != ["Good form!"]
-
-                            record_feedback = False
-
-                            # Record angle feedback if there's an issue or if it changed to good form
-                            if angle_issue:
-                                if angle_feedback_changed:
-                                    record_feedback = True
-                            else:
-                                if last_angle_feedback is not None and angle_feedback_changed:
-                                    record_feedback = True
-
-                            # Record pose feedback if it changed
-                            if pose_feedback_changed:
-                                record_feedback = True
-
-                            if record_feedback:
-                                # Record feedback with timestamp
-                                feedback_result = {
-                                    "timestamp": timedelta(seconds=int(current_time)),
-                                    "exercise": current_prediction,
-                                    "angle_feedback": angle_feedback,
-                                    "pose_feedback": pose_feedback,
-                                }
-                                feedback_results.append(feedback_result)
-
-                            # Update last feedback
-                            last_angle_feedback = angle_feedback
-                            last_pose_feedback = pose_feedback
+                            if filtered_feedback:
+                                feedback_results.append(
+                                    {
+                                        "timestamp": timedelta(seconds=current_time),
+                                        "exercise": current_prediction,
+                                        "frame_feedback": filtered_feedback,
+                                        "score": overall_error,
+                                    }
+                                )
+                        except KeyError:
+                            logging.warning(
+                                f"No evaluation rules for {current_prediction}."
+                            )
+                        except ValueError as e:
+                            logging.error(f"Error during evaluation: {e}")
 
             frame_count += 1
 
-        # Handle the last exercise in the video
+        # Handle the last exercise
         if current_exercise is not None:
             end_time = frame_count / fps
             avg_confidence = np.mean(confidences)
+            repetitions = repetition_counter.get_repetition_count(current_exercise)
             self.add_analysis_result(
-                current_exercise, start_time, end_time, avg_confidence, analysis_results
+                current_exercise,
+                start_time,
+                end_time,
+                avg_confidence,
+                analysis_results,
+                repetitions,
             )
 
         fvs.stop()
 
         return analysis_results, feedback_results
-
 
     def classify_sequence(self, sequence: np.ndarray) -> tuple[int, float]:
         """Classify a sequence of pose landmarks and return the predicted exercise and confidence."""
@@ -437,17 +442,19 @@ class FrameProcessor:
 
     def add_analysis_result(
         self,
-        exercise_class: int,
+        exercise: str,
         start_time: float,
         end_time: float,
         avg_confidence: float,
         analysis_results: list,
+        repetitions: int,
     ) -> None:
-        """Add the classified exercise with timestamps and average confidence to the results list."""
+        """Add the classified exercise with timestamps, average confidence, and repetitions to the results list."""
         result = {
-            "exercise": f"Class {self.video_processor.convert_index_to_exercise_name(exercise_class)}",
+            "exercise": f"Class {exercise}",
             "start_time": timedelta(seconds=int(start_time)),
             "end_time": timedelta(seconds=int(end_time)),
             "confidence": round(avg_confidence, 2),
+            "repetitions": repetitions,
         }
         analysis_results.append(result)

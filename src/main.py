@@ -1,4 +1,5 @@
 import tkinter as tk
+from datetime import datetime
 from tkinter import PhotoImage
 from tkinter import ttk
 from tkinter import messagebox
@@ -11,6 +12,7 @@ from gui.train_exercise import TrainSpecificScreen
 from gui.upload_review import UploadVideoScreen
 from src.gui.exercise_library_screen import ExerciseLibraryScreen
 from src.models.lstm import ExerciseLSTM
+from src.models.pose_autoencoder import PoseAutoencoder
 from utils.database import Database
 import os
 
@@ -18,13 +20,16 @@ import os
 class BodybuildingApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+        self.session_start_time = None
         self.device: torch.device | None = None
         self.icon_img: PhotoImage | None = None
         self.classification_model: ExerciseLSTM | None = None
+        self.autoencoder: PoseAutoencoder | None = None
 
         self.set_window_geometry()
         self.set_app_icon()
         self.db = Database()
+        self.current_session_id = None  # To keep track of the current session
 
         # Container for holding frames (screens)
         self.container: ttk.Frame = ttk.Frame(self)
@@ -41,6 +46,7 @@ class BodybuildingApp(tk.Tk):
         self.bind("<Configure>", self.on_resize)
 
         self.load_model()
+        self.load_autoencoder()
 
     def set_window_geometry(self) -> None:
         """Set the initial window geometry and handle resizing."""
@@ -82,8 +88,8 @@ class BodybuildingApp(tk.Tk):
     def load_model(
         self,
         input_size: int = 33 * 4,
-        hidden_size: int = 128,
-        num_layers: int = 2,
+        hidden_size: int = 512,
+        num_layers: int = 1,
         num_classes: int = 5,
     ) -> None:
         """Loads the model in a background thread."""
@@ -94,12 +100,30 @@ class BodybuildingApp(tk.Tk):
             )
             self.classification_model.load_state_dict(
                 torch.load(
-                    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\lstm_v1.pth",
+                    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\lstm_v3.pth",
                     map_location=self.device,
                 )
             )
             self.classification_model.to(self.device)
             self.classification_model.eval()
+
+        except Exception as e:
+            messagebox.showerror("Model Load Error", f"Error loading model: {str(e)}")
+
+    def load_autoencoder(
+        self, input_dim: int = 33 * 4, hidden_dim: int = 1024, latent_dim: int = 128
+    ) -> None:
+        """Load the pose autoencoder model."""
+        try:
+            self.autoencoder = PoseAutoencoder(input_dim, hidden_dim, latent_dim)
+            self.autoencoder.load_state_dict(
+                torch.load(
+                    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\autoencoder_v1.pth",
+                    map_location=self.device,
+                )
+            )
+            self.autoencoder.to(self.device)
+            self.autoencoder.eval()
 
         except Exception as e:
             messagebox.showerror("Model Load Error", f"Error loading model: {str(e)}")
@@ -118,8 +142,19 @@ class BodybuildingApp(tk.Tk):
 
     def on_resize(self, event) -> None:
         """Optional: Handle resizing logic."""
-        width = event.width
-        height = event.height
+
+    def start_new_session(self):
+        """Start a new session and store the session ID."""
+        self.session_start_time = datetime.now()  # Record the session start time
+        self.current_session_id = self.db.insert_session(self.session_start_time, None)
+
+    def end_current_session(self):
+        """End the current session by calculating duration and updating the database."""
+        if self.session_start_time:
+            end_time = datetime.now()
+            duration = (end_time - self.session_start_time).total_seconds()
+            self.db.update_session_duration(self.current_session_id, duration)
+            self.session_start_time = None  # Reset session start time
 
     def on_closing(self) -> None:
         """When the app closes, close the database connection."""
