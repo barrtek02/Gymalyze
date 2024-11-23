@@ -1,8 +1,11 @@
 import logging
 import tkinter as tk
-from tkinter import filedialog, Text, Button
+from tkinter import filedialog, Text
 from datetime import timedelta, datetime
-
+from tkinter import ttk
+from tkinter.ttk import Progressbar
+from PIL import Image, ImageTk
+import cv2
 from src.utils.frame_processor import FrameProcessor
 
 
@@ -20,56 +23,120 @@ class UploadVideoScreen(tk.Frame):
         self.session_start_time = None
         self.session_duration = None
 
-        # Text area to display results
-        self.result_text = Text(self, height=30, width=100)
-        self.result_text.grid(row=1, column=0, padx=10, pady=10)
+        # Header Label
+        header_label = tk.Label(
+            self, text="Upload and Analyze Video", font=("Arial", 16, "bold")
+        )
+        header_label.grid(row=0, column=0, pady=10)
 
         # Button to upload video
-        upload_button = Button(
-            self, text="Upload Video", command=self.upload_video, width=30, height=2
+        self.upload_button = ttk.Button(
+            self, text="Upload Video", command=self.upload_video
         )
-        upload_button.grid(row=0, column=0, padx=10, pady=10)
+        self.upload_button.grid(row=1, column=0, pady=10)
+
+        # Progress bar
+        self.progress_bar = Progressbar(
+            self, orient="horizontal", length=400, mode="determinate"
+        )
+        self.progress_bar.grid(row=2, column=0, pady=10)
+
+        # Video name display
+        self.video_label = tk.Label(self, text="No video uploaded", font=("Arial", 12))
+        self.video_label.grid(row=3, column=0, pady=10)
+
+        # Frame preview area
+        self.image_label = tk.Label(
+            self, text="No preview available", font=("Arial", 12)
+        )
+        self.image_label.grid(row=4, column=0, pady=10)
+
+        # Text area to display results
+        self.result_text = Text(
+            self, height=20, width=80, wrap="word", state="disabled"
+        )
+        self.result_text.grid(row=5, column=0, padx=10, pady=10)
 
         # Return button to go back to the home screen
-        return_button = Button(
+        self.return_button = ttk.Button(
             self,
-            text="Return",
+            text="Return to Home",
             command=lambda: controller.show_frame("HomeScreen"),
-            width=30,
-            height=2,
         )
-        return_button.grid(row=2, column=0, padx=10, pady=10, sticky="s")
+        self.return_button.grid(row=6, column=0, pady=10)
 
-    def upload_video(self) -> None:
+    def upload_video(self):
         """Open file dialog for user to select a video."""
         file_path = filedialog.askopenfilename(
             filetypes=[("Video files", "*.mp4 *.avi *.mov")]
         )
 
         if file_path:
+            # Update UI with video name
+            self.video_label.config(text=f"Processing: {file_path.split('/')[-1]}")
+
+            # Display the first frame
+            first_frame = self.get_first_frame(file_path)
+            if first_frame:
+                self.show_image(first_frame)
+
+            # Start progress bar and processing
+            self.progress_bar["value"] = 0
+            self.update_idletasks()
+
             # Start session time tracking
             self.session_start_time = datetime.now()
 
-            # Process the video
+            # Simulate processing in steps
+            self.after(500, lambda: self.process_video(file_path))
+
+    def process_video(self, file_path):
+        """Simulate video processing and display results."""
+        self.progress_bar["value"] = 50
+        self.update_idletasks()
+
+        try:
+            # Process video and get analysis results
             analysis_results, feedback_results = (
                 self.frame_processor.process_uploaded_video(file_path)
             )
 
-            # Calculate session duration
-            self.session_duration = round(
-                sum(
-                    (result["end_time"] - result["start_time"]).total_seconds()
-                    for result in analysis_results
-                ),
-                2,
-            )
-
-            # Save session data to database
+            # Save session and analysis data
             self.save_session_data()
-
-            # Save exercise data in the same format as live detection
             self.save_analysis_data(analysis_results, feedback_results)
-            self.display_analysis(analysis_results, feedback_results)
+
+        except Exception as e:
+            print(f"Error during processing: {e}")
+
+        # Finalize progress bar
+        self.progress_bar["value"] = 100
+        self.update_idletasks()
+
+        # Display results
+        self.display_analysis(analysis_results, feedback_results)
+
+    def get_first_frame(self, video_path):
+        """Extract the first frame from the video using OpenCV."""
+        try:
+            cap = cv2.VideoCapture(video_path)
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert to RGB
+                image = Image.fromarray(frame)
+                image = image.resize(
+                    (200, 150), Image.Resampling.LANCZOS
+                )  # Resize for preview
+                return image
+        except Exception as e:
+            print(f"Error extracting first frame: {e}")
+        return None
+
+    def show_image(self, image):
+        """Display an image in the image_label."""
+        img_tk = ImageTk.PhotoImage(image)
+        self.image_label.config(image=img_tk)
+        self.image_label.image = img_tk  # Keep a reference to avoid garbage collection
 
     def save_session_data(self):
         """Save session data to the database."""
@@ -206,8 +273,8 @@ class UploadVideoScreen(tk.Frame):
 
     def display_analysis(self, analysis_results, feedback_results):
         """Display the analysis results and feedback in the text area."""
+        self.result_text.configure(state="normal")
         self.result_text.delete(1.0, tk.END)
-
         # Display exercise analysis
         self.result_text.insert(tk.END, "Exercise Analysis:\n")
         for result in analysis_results:
@@ -247,3 +314,4 @@ class UploadVideoScreen(tk.Frame):
                 self.result_text.insert(
                     tk.END, "  All angles are correct for this frame.\n\n"
                 )
+        self.result_text.configure(state="disabled")
