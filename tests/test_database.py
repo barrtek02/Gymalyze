@@ -3,10 +3,12 @@ import os
 from datetime import datetime
 from src.utils.database import Database
 
+
 @pytest.fixture
 def temp_db_path(tmp_path):
     """Fixture to provide a temporary database path."""
     return str(tmp_path / "test_app_data.db")
+
 
 @pytest.fixture
 def db(temp_db_path):
@@ -15,10 +17,12 @@ def db(temp_db_path):
     yield database
     database.close()
 
+
 def test_create_connection(db):
     """Test that the database connection is successfully created."""
     assert db.conn is not None
     assert os.path.exists(db.db_path)
+
 
 def test_create_tables(db):
     """Test that tables are created successfully."""
@@ -32,6 +36,7 @@ def test_create_tables(db):
             "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
         )
         assert cursor.fetchone() is not None
+
 
 def test_insert_session(db):
     """Test inserting a session into the database."""
@@ -49,6 +54,7 @@ def test_insert_session(db):
     assert session[1] == start_time.strftime("%Y-%m-%d %H:%M:%S")
     assert session[2] == duration
 
+
 def test_insert_exercise_session(db):
     """Test inserting an exercise session into the database."""
     session_id = db.insert_session(datetime.now(), 60.5)
@@ -59,13 +65,19 @@ def test_insert_exercise_session(db):
     pose_correctness_score = 87.5
 
     exercise_session_id = db.insert_exercise_session(
-        session_id, exercise, repetitions, duration, angle_correctness_count, pose_correctness_score
+        session_id,
+        exercise,
+        repetitions,
+        duration,
+        angle_correctness_count,
+        pose_correctness_score,
     )
     assert exercise_session_id is not None
 
     cursor = db.conn.cursor()
     cursor.execute(
-        "SELECT * FROM exercise_sessions WHERE exercise_session_id=?", (exercise_session_id,)
+        "SELECT * FROM exercise_sessions WHERE exercise_session_id=?",
+        (exercise_session_id,),
     )
     exercise_session = cursor.fetchone()
 
@@ -77,10 +89,13 @@ def test_insert_exercise_session(db):
     assert exercise_session[5] == angle_correctness_count
     assert exercise_session[6] == round(pose_correctness_score, 2)
 
+
 def test_insert_angle_correctness(db):
     """Test inserting angle correctness feedback."""
     session_id = db.insert_session(datetime.now(), 60.5)
-    exercise_session_id = db.insert_exercise_session(session_id, "Squats", 10, 40.0, 3, 95.0)
+    exercise_session_id = db.insert_exercise_session(
+        session_id, "Squats", 10, 40.0, 3, 95.0
+    )
 
     db.insert_angle_correctness(
         exercise_session_id,
@@ -94,7 +109,8 @@ def test_insert_angle_correctness(db):
 
     cursor = db.conn.cursor()
     cursor.execute(
-        "SELECT * FROM angle_correctness WHERE exercise_session_id=?", (exercise_session_id,)
+        "SELECT * FROM angle_correctness WHERE exercise_session_id=?",
+        (exercise_session_id,),
     )
     angle_correctness = cursor.fetchone()
 
