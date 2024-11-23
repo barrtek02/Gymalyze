@@ -1,8 +1,9 @@
-# upload_review.py
+import logging
 import tkinter as tk
 from tkinter import filedialog, Text, Button
-from src.utils.frame_processor import FrameProcessor
 from datetime import timedelta, datetime
+
+from src.utils.frame_processor import FrameProcessor
 
 
 class UploadVideoScreen(tk.Frame):
@@ -14,9 +15,11 @@ class UploadVideoScreen(tk.Frame):
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
         # Initialize session details
         self.session_start_time = None
         self.session_duration = None
+
         # Text area to display results
         self.result_text = Text(self, height=30, width=100)
         self.result_text.grid(row=1, column=0, padx=10, pady=10)
@@ -29,7 +32,11 @@ class UploadVideoScreen(tk.Frame):
 
         # Return button to go back to the home screen
         return_button = Button(
-            self, text="Return", command=lambda: controller.show_frame("HomeScreen"), width=30, height=2
+            self,
+            text="Return",
+            command=lambda: controller.show_frame("HomeScreen"),
+            width=30,
+            height=2,
         )
         return_button.grid(row=2, column=0, padx=10, pady=10, sticky="s")
 
@@ -49,9 +56,12 @@ class UploadVideoScreen(tk.Frame):
             )
 
             # Calculate session duration
-            self.session_duration = sum(
-                (result["end_time"] - result["start_time"]).total_seconds()
-                for result in analysis_results
+            self.session_duration = round(
+                sum(
+                    (result["end_time"] - result["start_time"]).total_seconds()
+                    for result in analysis_results
+                ),
+                2,
             )
 
             # Save session data to database
@@ -69,146 +79,171 @@ class UploadVideoScreen(tk.Frame):
                 self.session_start_time, self.session_duration
             )
 
-    from datetime import datetime
-
-    from datetime import datetime, timedelta
-
     def save_analysis_data(self, analysis_results, feedback_results):
-        """Save analysis data in the same format as live_detection."""
+        """Save analysis data to the database."""
         for analysis in analysis_results:
-            # Parse the exercise data and remove "Class " prefix
-            exercise = analysis["exercise"].replace("Class ", "")
+            exercise = analysis["exercise"].split()[-1]
             start_time = analysis["start_time"]
             end_time = analysis["end_time"]
+            repetitions = analysis.get("repetitions", 0)  # Safely get repetitions count
             duration = (end_time - start_time).total_seconds()
-            confidence = analysis["confidence"]
 
-            # Set repetition count: 0 if no meaningful prediction
-            repetitions = 0 if exercise == "No Prediction" else 1
+            logging.debug(f"Processing analysis for exercise: {exercise}")
+            logging.debug(
+                f"Start Time: {start_time}, End Time: {end_time}, Duration: {duration}, Repetitions: {repetitions}"
+            )
 
-            # Get relevant feedback for this exercise
+            # Extract relevant feedback for the current exercise
+            print(exercise)
+            print(feedback_results)
             feedback_for_exercise = [
                 fb for fb in feedback_results if fb["exercise"] == exercise
             ]
 
-            # Extract feedback components
-            angle_correctness, pose_correctness_scores, pose_correctness_grades = (
+            if not feedback_for_exercise:
+                logging.debug(f"No feedback found for exercise: {exercise}")
+
+            # Parse feedback for angle and pose correctness
+            angle_correctness, pose_correctness_scores = (
                 self.extract_feedback_components(feedback_for_exercise)
             )
 
-            # Adjust the start_time to calculate time_of_appearance correctly
-            # Check if start_time is a timedelta and convert it to seconds if needed
-            if isinstance(start_time, timedelta):
-                time_of_appearance = start_time.total_seconds()
-            else:
-                time_of_appearance = (start_time - self.session_start_time).total_seconds()
+            # Debug logs for traceability
+            logging.debug(f"Angle Correctness Count: {len(angle_correctness)}")
+            logging.debug(f"Pose Correctness Scores: {pose_correctness_scores}")
 
-            # Save each exercise session
+            # Save exercise session to the database
             session_id = self.controller.current_session_id
+            average_pose_score = (
+                round(sum(pose_correctness_scores) / len(pose_correctness_scores), 2)
+                if pose_correctness_scores
+                else None
+            )
+
             exercise_session_id = self.controller.db.insert_exercise_session(
                 session_id,
                 exercise,
-                repetitions,
-                duration,
-                len(angle_correctness),
-                pose_correctness_scores[0] if pose_correctness_scores else None,  # Use the first score as default
-                pose_correctness_grades[0] if repetitions > 0 else "No Prediction",
+                repetitions,  # Repetition count
+                round(duration, 2),
+                len(angle_correctness),  # Total angles evaluated
+                average_pose_score,
             )
 
-            # Save angle correctness feedback with time of appearance
-            if repetitions > 0:
-                for feedback in angle_correctness:
-                    self.controller.db.insert_angle_correctness(
-                        exercise_session_id,
-                        feedback.get("body_part"),
-                        feedback.get("angle"),
-                        feedback.get("comment"),
-                        time_of_appearance=time_of_appearance  # Pass time of appearance
-                    )
+            if exercise_session_id is None:
+                logging.error(f"Failed to save session data for exercise: {exercise}")
+                continue
 
-            # Save each score and grade as separate entries in pose_correctness
-            if repetitions > 0:
-                for score, grade in zip(pose_correctness_scores, pose_correctness_grades):
-                    self.controller.db.insert_pose_correctness(
-                        exercise_session_id, score, grade, time_of_appearance=time_of_appearance
-                    )
-
-            # Append to exercises data
-            self.exercises_data.append(
-                {
-                    "exercise": exercise,
-                    "repetitions": repetitions,
-                    "duration": duration,
-                    "angle_correctness_count": len(angle_correctness),
-                    "pose_correctness_score": pose_correctness_scores[0] if pose_correctness_scores else "N/A",
-                    "pose_correctness_grade": "\n".join(
-                        pose_correctness_grades) if repetitions > 0 else "No Prediction",
-                }
+            logging.info(
+                f"Inserted exercise session with ID {exercise_session_id} for exercise: {exercise}"
             )
+
+            # Save angle correctness feedback
+            for feedback in angle_correctness:
+                logging.debug(
+                    f"Saving angle correctness feedback for {feedback['angle_name']}..."
+                )
+                self.controller.db.insert_angle_correctness(
+                    exercise_session_id,
+                    feedback["angle_name"],
+                    round(feedback["angle"], 2),
+                    round(feedback["expected_angle"], 2),
+                    round(feedback["threshold"], 2),
+                    feedback["comment"],
+                    self.calculate_time_of_appearance(start_time),
+                )
+
+            # Save pose correctness scores
+            for score in pose_correctness_scores:
+                logging.debug(f"Saving pose correctness score: {score}")
+                self.controller.db.insert_pose_correctness(
+                    exercise_session_id,
+                    round(score, 2),
+                    self.calculate_time_of_appearance(start_time),
+                )
 
     def extract_feedback_components(self, feedback_list):
         """Extract feedback components from the feedback list."""
         angle_correctness = []
         pose_correctness_scores = []
-        pose_correctness_grades = []
 
         for feedback in feedback_list:
             if isinstance(feedback, dict):
-                if "angle_feedback" in feedback:
-                    for msg in feedback["angle_feedback"]:
-                        if msg.lower() == "good form!":
-                            continue
-                        try:
-                            body_part, rest = msg.split(":")
-                            angle, comment = rest.split("\n")
-                            angle_correctness.append({
-                                "body_part": body_part.strip(),
-                                "angle": float(angle.replace("°", "").strip()),
-                                "comment": comment.strip("()")
-                            })
-                        except ValueError:
-                            pass  # Skip if parsing fails
+                if "frame_feedback" in feedback:
+                    for frame in feedback["frame_feedback"]:
+                        angle_correctness.append(
+                            {
+                                "angle_name": frame.get("Angle", "Unknown Angle"),
+                                "angle": frame.get("Input Angle", 0.0),
+                                "expected_angle": frame.get("Reconstructed Angle", 0.0),
+                                "threshold": frame.get("Threshold", 0.0),
+                                "comment": frame.get("Feedback", "No Feedback"),
+                            }
+                        )
+                if "score" in feedback:
+                    pose_correctness_scores.append(feedback["score"])
 
-                if "pose_feedback" in feedback:
-                    for msg in feedback["pose_feedback"]:
-                        if "Score:" in msg:
-                            try:
-                                score = float(msg.split("Score:")[1].strip())
-                                pose_correctness_scores.append(score)
-                            except ValueError:
-                                pass
-                        else:
-                            pose_correctness_grades.append(msg.strip())  # Ensure full strings
+        return angle_correctness, pose_correctness_scores
 
+    def calculate_time_of_appearance(self, start_time):
+        """
+        Calculate the time of appearance in seconds since the session started.
 
-        return angle_correctness, pose_correctness_scores, pose_correctness_grades
+        Args:
+            start_time (datetime): The start time of the event (as a `datetime` or `timedelta` object).
+
+        Returns:
+            float: The time difference in seconds since the session started.
+        """
+        if isinstance(start_time, timedelta):
+            # If start_time is a timedelta, calculate relative to session start
+            return round(start_time.total_seconds(), 2)
+        elif isinstance(start_time, datetime):
+            # If start_time is a datetime, calculate difference from session start
+            return round((start_time - self.session_start_time).total_seconds(), 2)
+        else:
+            logging.error(f"Unexpected start_time type: {type(start_time)}")
+            return 0.0
 
     def display_analysis(self, analysis_results, feedback_results):
         """Display the analysis results and feedback in the text area."""
         self.result_text.delete(1.0, tk.END)
 
+        # Display exercise analysis
         self.result_text.insert(tk.END, "Exercise Analysis:\n")
         for result in analysis_results:
             display_text = (
                 f"Exercise: {result['exercise']}\n"
                 f"Start Time: {result['start_time']}\n"
                 f"End Time: {result['end_time']}\n"
-                f"Average Confidence: {result['confidence']}%\n\n"
+                f"Average Confidence: {result['confidence']}%\n"
+                f"Repetitions: {result['repetitions']}\n\n"
             )
             self.result_text.insert(tk.END, display_text)
 
-        # Display feedback
+        # Display detailed feedback
         self.result_text.insert(tk.END, "\nDetailed Feedback:\n")
         for feedback in feedback_results:
-            display_text = (
+            self.result_text.insert(
+                tk.END,
                 f"Timestamp: {feedback['timestamp']}\n"
-                f"Exercise: {feedback['exercise']}\n"
-                f"Angle Correctness:\n"
+                f"Exercise: {feedback['exercise']}\n",
             )
-            for angle_msg in feedback["angle_feedback"]:
-                display_text += f" - {angle_msg}\n"
-            display_text += "Pose Correctness:\n"
-            for pose_msg in feedback["pose_feedback"]:
-                display_text += f" - {pose_msg}\n"
-            display_text += "\n"
-            self.result_text.insert(tk.END, display_text)
+
+            # Add frame-by-frame feedback if there's an issue
+            frame_feedback = feedback.get("frame_feedback", [])
+            if frame_feedback:
+                for frame in frame_feedback:
+                    self.result_text.insert(
+                        tk.END,
+                        (
+                            f"  Angle: {frame['Angle']}\n"
+                            f"  Input Angle: {frame['Input Angle']:.1f}°\n"
+                            f"  Reconstructed Angle: {frame['Reconstructed Angle']:.1f}°\n"
+                            f"  Threshold: ±{frame['Threshold']:.1f}°\n"
+                            f"  Feedback: {frame['Feedback']}\n\n"
+                        ),
+                    )
+            else:
+                self.result_text.insert(
+                    tk.END, "  All angles are correct for this frame.\n\n"
+                )

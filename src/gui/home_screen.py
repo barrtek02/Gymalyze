@@ -36,9 +36,7 @@ class HomeScreen(tk.Frame):
         upload_image = Image.open(assets_path / "upload_video.jpg").resize((300, 300))
         upload_photo = ImageTk.PhotoImage(upload_image)
 
-        library_image = Image.open(assets_path / "database_view.jpg").resize(
-            (200, 200)
-        )
+        library_image = Image.open(assets_path / "database_view.jpg").resize((200, 200))
         library_photo = ImageTk.PhotoImage(library_image)
 
         self.live_photo = live_photo

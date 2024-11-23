@@ -1,7 +1,6 @@
 import sqlite3
 from sqlite3 import Error
 import os
-from datetime import datetime, timezone
 import logging
 
 # Configure logging
@@ -63,7 +62,6 @@ class Database:
                     duration REAL,
                     angle_correctness INTEGER DEFAULT 0,
                     pose_correctness_score REAL,
-                    pose_correctness_grade TEXT,
                     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                 )
             """
@@ -75,8 +73,10 @@ class Database:
                 CREATE TABLE IF NOT EXISTS angle_correctness (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     exercise_session_id INTEGER,
-                    body_part TEXT,
+                    angle_name TEXT,
                     angle REAL,
+                    expected_angle REAL,
+                    threshold REAL,
                     comment TEXT,
                     time_of_appearance REAL,
                     FOREIGN KEY (exercise_session_id) REFERENCES exercise_sessions(exercise_session_id)
@@ -91,7 +91,6 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     exercise_session_id INTEGER,
                     score REAL,
-                    grade TEXT,
                     time_of_appearance REAL,
                     FOREIGN KEY (exercise_session_id) REFERENCES exercise_sessions(exercise_session_id)
                 )
@@ -115,9 +114,13 @@ class Database:
                     "ALTER TABLE pose_correctness RENAME COLUMN timestamp TO time_of_appearance;"
                 )
                 self.conn.commit()
-                logging.info("Renamed 'timestamp' to 'time_of_appearance' in pose_correctness table.")
+                logging.info(
+                    "Renamed 'timestamp' to 'time_of_appearance' in pose_correctness table."
+                )
             else:
-                logging.debug("'time_of_appearance' column already exists in pose_correctness table.")
+                logging.debug(
+                    "'time_of_appearance' column already exists in pose_correctness table."
+                )
 
             # Check and add for angle_correctness
             c.execute("PRAGMA table_info(angle_correctness)")
@@ -127,9 +130,13 @@ class Database:
                     "ALTER TABLE angle_correctness RENAME COLUMN timestamp TO time_of_appearance;"
                 )
                 self.conn.commit()
-                logging.info("Renamed 'timestamp' to 'time_of_appearance' in angle_correctness table.")
+                logging.info(
+                    "Renamed 'timestamp' to 'time_of_appearance' in angle_correctness table."
+                )
             else:
-                logging.debug("'time_of_appearance' column already exists in angle_correctness table.")
+                logging.debug(
+                    "'time_of_appearance' column already exists in angle_correctness table."
+                )
 
         except Error as e:
             logging.error(f"Error updating time_of_appearance columns: {e}")
@@ -186,8 +193,8 @@ class Database:
         duration,
         angle_correctness_count,
         pose_correctness_score,
-        pose_correctness_grade,
     ):
+        print(pose_correctness_score)
         """Insert an exercise record into the exercise_sessions table."""
         try:
             with self.conn:
@@ -195,9 +202,9 @@ class Database:
                     """
                     INSERT INTO exercise_sessions (
                         session_id, exercise, repetitions, duration,
-                        angle_correctness, pose_correctness_score, pose_correctness_grade
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
+                        angle_correctness, pose_correctness_score
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
                     (
                         session_id,
                         exercise,
@@ -209,54 +216,70 @@ class Database:
                             if pose_correctness_score is not None
                             else None
                         ),
-                        pose_correctness_grade,
                     ),
                 )
                 exercise_session_id = cursor.lastrowid
                 logging.info(
-                    f"Inserted exercise_session with ID {exercise_session_id}."
+                    f"Inserted exercise session with ID {exercise_session_id}."
                 )
                 return exercise_session_id
         except Error as e:
             logging.error(f"Error inserting exercise session: {e}")
             return None
 
-    def insert_angle_correctness(self, exercise_session_id, body_part, angle, comment, time_of_appearance):
-        """Insert angle correctness feedback into the angle_correctness table with time_of_appearance."""
+    def insert_angle_correctness(
+        self,
+        exercise_session_id,
+        angle_name,
+        angle,
+        expected_angle,
+        threshold,
+        comment,
+        time_of_appearance,
+    ):
+        """Insert angle correctness feedback into the angle_correctness table with all relevant fields."""
         try:
             with self.conn:
                 self.conn.execute(
                     """
                     INSERT INTO angle_correctness (
-                        exercise_session_id, body_part, angle, comment, time_of_appearance
-                    ) VALUES (?, ?, ?, ?, ?)
-                """,
-                    (exercise_session_id, body_part, angle, comment, time_of_appearance),
+                        exercise_session_id, angle_name, angle, expected_angle, threshold, comment, time_of_appearance
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        exercise_session_id,
+                        angle_name,
+                        angle,
+                        expected_angle,
+                        threshold,
+                        comment,
+                        time_of_appearance,
+                    ),
                 )
                 logging.info(
-                    f"Inserted angle_correctness for exercise_session_id {exercise_session_id}."
+                    f"Inserted angle correctness for exercise_session_id {exercise_session_id}."
                 )
         except Error as e:
-            logging.error(f"Error inserting angle_correctness: {e}")
+            logging.error(f"Error inserting angle correctness: {e}")
 
-    def insert_pose_correctness(self, exercise_session_id, score, grade, time_of_appearance):
-        """Insert pose correctness data into the pose_correctness table with time_of_appearance."""
+    def insert_pose_correctness(self, exercise_session_id, score, time_of_appearance):
+        """Insert pose correctness data into the pose_correctness table."""
         try:
             with self.conn:
                 rounded_score = round(score, 2) if score is not None else None
                 self.conn.execute(
                     """
                     INSERT INTO pose_correctness (
-                        exercise_session_id, score, grade, time_of_appearance
-                    ) VALUES (?, ?, ?, ?)
-                """,
-                    (exercise_session_id, rounded_score, grade, time_of_appearance),
+                        exercise_session_id, score, time_of_appearance
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (exercise_session_id, rounded_score, time_of_appearance),
                 )
                 logging.info(
-                    f"Inserted pose_correctness for exercise_session_id {exercise_session_id}."
+                    f"Inserted pose correctness for exercise_session_id {exercise_session_id}."
                 )
         except Error as e:
-            logging.error(f"Error inserting pose_correctness: {e}")
+            logging.error(f"Error inserting pose correctness: {e}")
 
     def update_session_duration(self, session_id, duration):
         """Update the duration of a session."""

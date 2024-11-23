@@ -1,11 +1,10 @@
 # live_detection.py
-
+import logging
 import time
 import tkinter as tk
 from tkinter import Label
 
 import cv2
-import numpy as np
 from PIL import Image, ImageTk
 
 from src.utils.frame_processor import FrameProcessor
@@ -64,8 +63,12 @@ class LiveDetectionScreen(tk.Frame):
         self.exercises_data = []  # List to store data for each exercise
         self.current_exercise = None
         self.current_repetition_count = 0
-        self.current_feedback_display_list = []  # This will reset each frame for GUI display
-        self.full_feedback_list = []  # This accumulates all feedback for saving to the database
+        self.current_feedback_display_list = (
+            []
+        )  # This will reset each frame for GUI display
+        self.full_feedback_list = (
+            []
+        )  # This accumulates all feedback for saving to the database
 
         self.current_exercise_start_time = (
             None  # Track the start time of the current exercise
@@ -95,34 +98,91 @@ class LiveDetectionScreen(tk.Frame):
         repetition_count = data["repetition_count"]
         current_feedback = data["current_feedback"]
 
+        if "score" not in current_feedback or current_feedback["score"] is None:
+            current_feedback["score"] = 0.0  # Default score if not provided
         # Check if the exercise has changed
         if self.current_exercise != current_prediction:
             if self.current_exercise is not None:
                 # Save the previous exercise data
                 self.save_exercise_data()
+
             # Reset counters for the new exercise
             self.current_exercise = current_prediction
             self.current_repetition_count = repetition_count
-            self.full_feedback_list = []  # Clear accumulated feedback for the new exercise
+            self.full_feedback_list = (
+                []
+            )  # Clear accumulated feedback for the new exercise
             self.current_exercise_start_time = time.time()  # Record start time
             self.last_feedback_time = 0  # Reset feedback timestamp
         else:
             # Update repetition count and feedback
             self.current_repetition_count = repetition_count
-            if isinstance(current_feedback, list):
-                current_time = time.time()
-                if current_time - self.last_feedback_time >= 1:
-                    # Append to full feedback list for database storage
-                    self.full_feedback_list.extend(current_feedback)
+            current_time = time.time()
+            if (
+                isinstance(current_feedback, dict)
+                and current_time - self.last_feedback_time >= 1
+            ):
+                # Append feedback details, including score, to the full feedback list
+                feedback_with_score = current_feedback.copy()
+                if "details" not in feedback_with_score:
+                    feedback_with_score["details"] = []
+                self.full_feedback_list.append(feedback_with_score)
 
-                    # Update limited feedback display list
-                    self.current_feedback_display_list = current_feedback
-                    self.last_feedback_time = current_time
-            else:
-                print(f"Warning: current_feedback is not a list: {current_feedback}")
+                # Update the current feedback display list for UI
+                self.current_feedback_display_list = current_feedback.get("details", [])
+                self.last_feedback_time = current_time
 
-        # Collect left side information
-        # Format prediction text with desired layout
+        # Extract exercise score and feedback details
+        exercise_score = current_feedback.get("score", None)
+        feedback_details = current_feedback.get("details", [])
+
+        # Format exercise score
+        score_text = (
+            f"Exercise Score: {exercise_score:.2f}%"
+            if exercise_score is not None
+            else "No Score Available"
+        )
+
+        # Format right-side feedback text
+        right_text = f"{score_text}\n\n"
+
+        for feedback in feedback_details:
+            # Extract details from feedback
+            feedback.get("Frame", "N/A")
+            friendly_angle = feedback.get("Friendly Angle", "Unknown Angle")
+            input_angle = feedback.get("Input Angle (degrees)", "N/A")
+            reconstructed_angle = feedback.get("Reconstructed Angle (degrees)", "N/A")
+            feedback.get("Deviation (degrees)", "N/A")
+            threshold = feedback.get("Threshold (degrees)", "N/A")
+            feedback_message = feedback.get("Feedback", "No Feedback")
+
+            # Format angles and threshold
+            input_angle_str = (
+                f"{input_angle:.2f}°"
+                if isinstance(input_angle, (int, float))
+                else input_angle
+            )
+            reconstructed_angle_str = (
+                f"{reconstructed_angle:.2f}°"
+                if isinstance(reconstructed_angle, (int, float))
+                else reconstructed_angle
+            )
+            threshold_str = (
+                f"± {threshold:.2f}°"
+                if isinstance(threshold, (int, float))
+                else threshold
+            )
+
+            # Add formatted text to `right_text`
+            right_text += f"{friendly_angle}:\n"
+            right_text += f"Input Angle: {input_angle_str}\n"
+            right_text += f"Expected Angle: {reconstructed_angle_str} {threshold_str}\n"
+            right_text += f"Feedback: {feedback_message}\n\n"
+
+        # Update right label with the formatted text
+        self.right_label.config(text=right_text.strip(), font=("Helvetica", 18))
+
+        # Update the left label with prediction and repetition info
         prediction_name = current_prediction.replace("_", " ").title()
         prediction_text = (
             f"FPS: {fps}\n\n"
@@ -131,35 +191,10 @@ class LiveDetectionScreen(tk.Frame):
             f"Repetitions:\n"
             f"{repetition_count}"
         )
-
-        # Update left label with formatted text
         self.left_label.config(text=prediction_text, font=("Helvetica", 18))
-
-        # Ensure current_feedback is in the correct format
-        if not self.current_feedback_display_list or not isinstance(
-            self.current_feedback_display_list[0], tuple
-        ):
-            current_feedback_display = [
-                ("Angle Correctness", ["No Feedback"]),
-                ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
-            ]
-        else:
-            current_feedback_display = self.current_feedback_display_list
-
-        # Format right-side feedback messages for readability with sections
-        right_text = ""
-        for section, messages in current_feedback_display:
-            right_text += f"{section}:\n"
-            for msg in messages:
-                right_text += f" - {msg}\n"
-            right_text += "\n"  # Add space between sections
-
-        # Update right label with feedback text
-        self.right_label.config(text=right_text.strip(), font=("Helvetica", 18))
 
         # Convert frame to RGB and display
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # Resize the frame to make the camera view larger
         desired_width = 800  # Set your desired width
         desired_height = 600  # Set your desired height
         frame_resized = cv2.resize(frame_rgb, (desired_width, desired_height))
@@ -172,21 +207,43 @@ class LiveDetectionScreen(tk.Frame):
         self.after(10, self.update_frame)
 
     def format_feedback_display(self, feedback_list):
-        """Format feedback list for display in the GUI."""
-        if not feedback_list or not isinstance(feedback_list[0], tuple):
-            feedback_list = [
-                ("Angle Correctness", ["No Feedback"]),
-                ("Pose Correctness", ["Score: 0.0", "No Prediction"]),
-            ]
-
+        """Format feedback for display in the GUI."""
+        unique_feedback = set()  # Track unique feedback
         right_text = ""
-        for section, messages in feedback_list:
-            right_text += f"{section}:\n"
-            for msg in messages:
-                right_text += f" - {msg}\n"
-            right_text += "\n"
 
-        return right_text
+        # Display the exercise score
+        if (
+            hasattr(self.frame_processor, "current_score")
+            and self.frame_processor.current_score is not None
+        ):
+            right_text += (
+                f"Exercise Score: {self.frame_processor.current_score:.2f}%\n\n"
+            )
+
+        for feedback in feedback_list:
+            if isinstance(feedback, dict):  # Ensure feedback is properly structured
+                # Extract feedback details
+                angle = feedback.get("Angle", "Unknown Angle")
+                input_angle = feedback.get("Input Angle (degrees)", "N/A")
+                reconstructed_angle = feedback.get(
+                    "Reconstructed Angle (degrees)", "N/A"
+                )
+                threshold = feedback.get("Threshold (degrees)", "N/A")
+                feedback_message = feedback.get("Feedback", "No Feedback")
+
+                # Avoid duplicate feedback messages
+                if feedback_message not in unique_feedback:
+                    unique_feedback.add(feedback_message)
+                    # Format the feedback for display
+                    right_text += (
+                        f"Angle: {angle}\n"
+                        f"Input Angle: {input_angle:.1f}°\n"
+                        f"Reconstructed Angle: {reconstructed_angle:.1f}°\n"
+                        f"Threshold: {threshold:.1f}°\n"
+                        f"Feedback: {feedback_message}\n\n"
+                    )
+
+        return right_text.strip() if right_text else "No Feedback Available"
 
     def save_exercise_data(self):
         """Save data for the current exercise."""
@@ -196,17 +253,24 @@ class LiveDetectionScreen(tk.Frame):
         # Calculate duration
         end_time = time.time()
         duration = (
-            end_time - self.current_exercise_start_time
+            round(end_time - self.current_exercise_start_time, 2)
             if self.current_exercise_start_time
-            else 0
+            else 0.0
         )
 
         # Extract feedback components
-        angle_correctness, summary_pose_correctness_score, pose_correctness_scores, unique_grades = (
-            self.extract_feedback_components(self.full_feedback_list)
+        angle_correctness, pose_correctness_scores = self.extract_feedback_components(
+            self.full_feedback_list
         )
 
-        # Insert into the exercise_sessions table and get the exercise_session_id
+        # Calculate the summary pose correctness score (e.g., average or max)
+        summary_pose_correctness_score = (
+            round(sum(pose_correctness_scores) / len(pose_correctness_scores), 2)
+            if pose_correctness_scores
+            else None
+        )
+
+        # Insert exercise session into the database
         session_id = self.controller.current_session_id
         exercise_session_id = self.controller.db.insert_exercise_session(
             session_id,
@@ -215,118 +279,71 @@ class LiveDetectionScreen(tk.Frame):
             duration,
             len(angle_correctness),
             summary_pose_correctness_score,
-            ", ".join(unique_grades) if unique_grades else "No Prediction",
         )
 
         if exercise_session_id is None:
-            print("Failed to insert exercise session.")
+            logging.error("Failed to insert exercise session.")
             return
 
-        # Insert each angle_correctness feedback into angle_correctness table
+        # Save individual angle correctness feedback
         for feedback in angle_correctness:
-            if (
-                    feedback.get("body_part")
-                    and feedback.get("angle") is not None
-                    and feedback.get("comment")
-            ):
-                time_of_appearance = self.calculate_time_of_appearance()
-                self.controller.db.insert_angle_correctness(
-                    exercise_session_id,
-                    feedback.get("body_part"),
-                    feedback.get("angle"),
-                    feedback.get("comment"),
-                    time_of_appearance=time_of_appearance
-                )
+            angle = round(feedback["angle"], 2)
+            expected_angle = round(feedback["expected_angle"], 2)
+            threshold = round(feedback["threshold"], 2)
 
-        # Insert each individual pose_correctness score and grade
-        for score, grade in zip(pose_correctness_scores, unique_grades):
-            time_of_appearance = self.calculate_time_of_appearance()
-            self.controller.db.insert_pose_correctness(
-                exercise_session_id, score, grade, time_of_appearance=time_of_appearance
+            self.controller.db.insert_angle_correctness(
+                exercise_session_id,
+                feedback["angle_name"],
+                angle,
+                expected_angle,
+                threshold,
+                feedback["comment"],
+                self.calculate_time_of_appearance(),
             )
 
-        # Append to exercises data
-        self.exercises_data.append(
-            {
-                "exercise": exercise,
-                "repetitions": repetitions,
-                "duration": duration,
-                "angle_correctness_count": len(angle_correctness),
-                "pose_correctness_score": summary_pose_correctness_score,
-                "pose_correctness_grade": ", ".join(unique_grades) if unique_grades else "No Prediction",
-            }
-        )
+        # Save individual pose correctness scores
+        for score in pose_correctness_scores:
+            self.controller.db.insert_pose_correctness(
+                exercise_session_id,
+                round(score, 2),
+                self.calculate_time_of_appearance(),
+            )
 
-        # Reset current exercise data
+        # Reset exercise data
         self.current_exercise = None
         self.current_repetition_count = 0
-        self.current_feedback_display_list = []  # Clear the display feedback list
-        self.full_feedback_list = []  # Clear the full feedback list for the next exercise
+        self.current_feedback_display_list = []
+        self.full_feedback_list = []
         self.current_exercise_start_time = None
 
     def extract_feedback_components(self, feedback_list):
-        """Extract feedback components from the feedback list."""
+        """Extract feedback components for saving."""
         angle_correctness = []
         pose_correctness_scores = []
-        pose_correctness_grades = []
-
-        print("Debug: Starting extract_feedback_components")
-        print(f"Feedback List: {feedback_list}")
 
         for feedback in feedback_list:
-            if isinstance(feedback, tuple) and len(feedback) == 2:
-                section, messages = feedback
-                if section == "Angle Correctness":
-                    for msg in messages:
-                        # Handle "No Feedback"
-                        if msg.strip().lower() == "no feedback":
-                            continue
-                        # Assuming msg format: "BodyPart: Angle°\n(Comment)"
-                        try:
-                            body_part_part, rest = msg.split(":", 1)
-                            angle_part, comment_part = rest.split("\n", 1)
-                            angle_str = angle_part.strip().replace("°", "")
-                            angle = float(angle_str)
-                            comment = comment_part.strip("()")
-                            angle_correctness.append(
-                                {
-                                    "body_part": body_part_part.strip(),
-                                    "angle": angle,
-                                    "comment": comment,
-                                }
-                            )
-                        except ValueError:
-                            print(
-                                f"Warning: Unable to parse angle correctness message: {msg}"
-                            )
-                elif section == "Pose Correctness":
-                    for msg in messages:
-                        if msg.startswith("Score:"):
-                            try:
-                                score = float(msg.split("Score:")[1].strip())
-                                pose_correctness_scores.append(score)
-                            except ValueError:
-                                print(
-                                    f"Warning: Unable to parse score from message: {msg}"
-                                )
-                        else:
-                            pose_correctness_grades.append(msg.strip())
-            else:
-                print(f"Warning: Unexpected feedback format: {feedback}")
+            if isinstance(feedback, dict):
+                # Extract angle correctness data
+                if "details" in feedback:
+                    for detail in feedback["details"]:
+                        angle_correctness.append(
+                            {
+                                "angle_name": detail.get(
+                                    "Friendly Angle", "Unknown Angle"
+                                ),
+                                "angle": detail.get("Input Angle (degrees)", 0.0),
+                                "expected_angle": detail.get(
+                                    "Reconstructed Angle (degrees)", 0.0
+                                ),
+                                "threshold": detail.get("Threshold (degrees)", 0.0),
+                                "comment": detail.get("Feedback", "No Feedback"),
+                            }
+                        )
+                # Extract pose correctness score
+                if "score" in feedback:
+                    pose_correctness_scores.append(feedback["score"])
 
-        # Choose a specific score, e.g., the highest score (or however you want to summarize it)
-        summary_pose_correctness_score = (
-            max(pose_correctness_scores) if pose_correctness_scores else None
-        )
-
-        # Combine pose correctness grades into a single string or other desired structure
-        unique_grades = list(set(pose_correctness_grades))
-
-        print(f"Debug: Extracted angle_correctness: {angle_correctness}")
-        print(f"Debug: Extracted summary_pose_correctness_score: {summary_pose_correctness_score}")
-        print(f"Debug: Extracted unique grades: {unique_grades}")
-
-        return angle_correctness, summary_pose_correctness_score, pose_correctness_scores, unique_grades
+        return angle_correctness, pose_correctness_scores
 
     def calculate_time_of_appearance(self):
         """Calculate the time of appearance in seconds since the start of the session."""

@@ -1,4 +1,3 @@
-from src.utils.pose_estimator import PoseEstimator
 from src.utils.video_processor import VideoProcessor
 from pathlib import Path
 

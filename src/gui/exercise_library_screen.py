@@ -144,34 +144,38 @@ class ExerciseLibraryScreen(tk.Frame):
         # Depending on the table, prepare relevant details
         details = ""
         if table_name == "sessions":
-            details = f"Session ID: {record.get('session_id')}\nDate: {record.get('date')}\nDuration: {record.get('duration')}"
+            details = (
+                f"Session ID: {record.get('session_id')}\n"
+                f"Date: {record.get('date')}\n"
+                f"Duration[s]: {record.get('duration')}"
+            )
         elif table_name == "exercise_sessions":
             details = (
                 f"Exercise Session ID: {record.get('exercise_session_id')}\n"
                 f"Session ID: {record.get('session_id')}\n"
                 f"Exercise: {record.get('exercise')}\n"
                 f"Repetitions: {record.get('repetitions')}\n"
-                f"Duration: {record.get('duration')}\n"
-                f"Pose Correctness Score: {record.get('pose_correctness_score')}\n"
-                f"Pose Correctness Grade: {record.get('pose_correctness_grade')}\n"
-                f"Angle Correctness Feedback Count: {record.get('angle_correctness')}"
+                f"Duration[s]: {record.get('duration')}\n"
+                f"Angle Correctness Feedback Count: {record.get('angle_correctness')}\n"
+                f"Pose Correctness Score[%]: {record.get('pose_correctness_score')}\n"
             )
         elif table_name == "angle_correctness":
             details = (
                 f"ID: {record.get('id')}\n"
                 f"Exercise Session ID: {record.get('exercise_session_id')}\n"
-                f"Body Part: {record.get('body_part')}\n"
-                f"Angle: {record.get('angle')}\n"
+                f"Angle Name: {record.get('angle_name')}\n"
+                f"Angle[°]: {record.get('angle')}\n"
+                f"Expected Angle[°]: {record.get('expected_angle')}\n"
+                f"Threshold[±]: {record.get('threshold')}\n"
                 f"Comment: {record.get('comment')}\n"
-                f"Timestamp: {record.get('timestamp')}"
+                f"Time of Appearance[s]: {record.get('time_of_appearance')}"
             )
         elif table_name == "pose_correctness":
             details = (
                 f"ID: {record.get('id')}\n"
                 f"Exercise Session ID: {record.get('exercise_session_id')}\n"
-                f"Score: {record.get('score')}\n"
-                f"Grade: {record.get('grade')}\n"
-                f"Timestamp: {record.get('timestamp')}"
+                f"Score[%]: {record.get('score')}\n"
+                f"Time of Appearance[s]: {record.get('time_of_appearance')}"
             )
 
         # Display the details in the details_text widget
@@ -182,13 +186,8 @@ class ExerciseLibraryScreen(tk.Frame):
 
     def load_data(self):
         """Load data from the selected table and display it."""
-        # Get the database connection from the controller
         db = self.controller.db
-
-        # Get the selected table name
         table_name = self.selected_table.get()
-
-        # Get filter value
         session_id_filter = self.session_id_entry.get().strip()
 
         # Fetch column names
@@ -205,7 +204,7 @@ class ExerciseLibraryScreen(tk.Frame):
             return
         column_names = [info[1] for info in columns_info]
 
-        # Destroy the existing Treeview columns
+        # Destroy existing Treeview columns
         for col in self.tree["columns"]:
             self.tree.heading(col, text="")
             self.tree.column(col, width=0)
@@ -214,14 +213,11 @@ class ExerciseLibraryScreen(tk.Frame):
         # Configure the Treeview columns and headings
         for col in column_names:
             display_name = col.replace("_", " ").title()
-            if table_name == "exercise_sessions" and col == "angle_correctness":
-                display_name = "Angle Correctness Count"
             self.tree.heading(col, text=display_name)
             self.tree.column(col, width=150, anchor="center")
 
-        # Construct the SQL query
+        # Construct SQL query
         if session_id_filter:
-            # Determine the appropriate column for filtering based on the table
             if table_name in [
                 "exercise_sessions",
                 "angle_correctness",
@@ -250,13 +246,11 @@ class ExerciseLibraryScreen(tk.Frame):
             messagebox.showerror("Error", f"Failed to retrieve data: {e}")
             return
 
-        # Clear existing data in the Treeview
+        # Clear Treeview and insert new data
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        # Insert data into the Treeview
         for row in rows:
-            # Convert all None values to 'N/A' for display
             display_row = [item if item is not None else "N/A" for item in row]
             self.tree.insert("", tk.END, values=display_row)
 
