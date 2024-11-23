@@ -2,7 +2,7 @@
 import logging
 import time
 import tkinter as tk
-from tkinter import Label
+from tkinter import Label, ttk
 
 import cv2
 from PIL import Image, ImageTk
@@ -52,12 +52,11 @@ class LiveDetectionScreen(tk.Frame):
         self.right_label.grid(row=1, column=2, padx=10, pady=10, sticky="n")
 
         # Bottom-center cell (2,1) for the exit button
-        exit_button = tk.Button(
+        exit_button = ttk.Button(
             self,
             text="Exit Detection",
             command=self.on_closing,
             width=30,
-            height=2,
         )
         exit_button.grid(row=2, column=1, padx=20, pady=20, sticky="nsew")
         self.exercises_data = []  # List to store data for each exercise
