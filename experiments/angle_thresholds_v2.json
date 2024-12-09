@@ -1,0 +1,21 @@
+{
+    "squat": {
+        "Left Hip-Left Knee-Left Ankle": 0.14216012954711915,
+        "Left Shoulder-Left Hip-Left Knee": 0.12135496139526376
+    },
+    "push-up": {
+        "Left Shoulder-Left Elbow-Left Wrist": 0.16454839706420904,
+        "Left Hip-Left Knee-Left Ankle": 0.14216012954711915
+    },
+    "deadlift": {
+        "Left Shoulder-Left Hip-Left Knee": 0.12135496139526376,
+        "Left Hip-Left Knee-Left Ankle": 0.14216012954711915
+    },
+    "bench-press": {
+        "Left Shoulder-Left Elbow-Left Wrist": 0.16454839706420904
+    },
+    "bicep-curl": {
+        "Left Shoulder-Left Elbow-Left Wrist": 0.16454839706420904,
+        "Right Shoulder-Right Elbow-Right Wrist": 0.18258056640625006
+    }
+}

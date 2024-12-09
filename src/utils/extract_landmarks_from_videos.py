@@ -1,10 +1,10 @@
-from src.utils.video_processor import VideoProcessor
+from src.utils.video_processor import LandmarkProcessor
 from pathlib import Path
 
 if __name__ == "__main__":
 
     # Initialize your pose estimator and video processor
-    video_processor = VideoProcessor()
+    video_processor = LandmarkProcessor()
 
     # Define the input directory containing videos and the output directory to save results
     input_dir = Path(

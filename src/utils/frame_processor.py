@@ -11,7 +11,6 @@ from src.utils.repetition_counter import RepetitionCounter
 from src.utils.video_processor import VideoProcessor
 from src.utils.imutils.video import WebcamVideoStream, FPS
 from src.utils.autoencoder_exercise_evaluator import ExerciseEvaluator
-from src.utils.sequence_comparator import SequenceComparator
 
 
 class FrameProcessor:
@@ -40,27 +39,6 @@ class FrameProcessor:
 
         self.exercise_evaluator = ExerciseEvaluator()
 
-        # Load the dataset and labels
-        dataset = np.load(
-            r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\landmarks_data.npy",
-            allow_pickle=True,
-        )
-        labels = np.load(
-            r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\labels_data.npy",
-            allow_pickle=True,
-        )
-
-        label_to_exercise = {
-            0: "bench_press",
-            1: "bicep_curl",
-            2: "squat",
-            3: "deadlift",
-            4: "push_up",
-        }
-
-        self.sequence_comparator = SequenceComparator(
-            dataset, labels, label_to_exercise
-        )
 
     def start(self):
         self.stop_event.clear()  # Reset the stop event before starting the new thread
@@ -230,7 +208,7 @@ class FrameProcessor:
             self.fps.update()
         return frame
 
-    def get_current_data(self):
+    def get_current_data(self) -> dict[str, any]:
         """Return data needed by the GUI."""
         data = {
             "fps": int(self.fps.fps()) if self.fps else 0,

@@ -2,9 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load results into a DataFrame
-results_df = pd.read_csv(
-    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\utils\hyperparameter_tuning_progress.csv"
-)
+results_df = pd.read_csv(r"/experiments/hyperparameter_tuning_progress.csv")
 
 # Plot Test Accuracy as Scatter Plot
 plt.figure(figsize=(10, 6))
@@ -26,9 +24,7 @@ plt.show()
 
 
 # Load results into a DataFrame
-results_df = pd.read_csv(
-    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\utils\hyperparameter_tuning_progress.csv"
-)
+results_df = pd.read_csv(r"/experiments/hyperparameter_tuning_progress.csv")
 
 # Example: Select the first row's epoch data for plotting
 # Adjust the row selection as needed

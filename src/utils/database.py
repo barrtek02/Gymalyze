@@ -21,8 +21,6 @@ class Database:
         self.conn = self.create_connection()
         if self.conn:
             self.create_tables()
-            self.add_time_of_appearance_column()
-            self.rename_angle_correctness_table()
         else:
             logging.critical("Failed to establish database connection.")
 

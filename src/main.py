@@ -16,6 +16,13 @@ from src.models.pose_autoencoder import PoseAutoencoder
 from utils.database import Database
 import os
 
+CLASSIFICATION_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "saved_models/lstm_v3.pth"
+)
+AUTOENCODER_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__), "saved_models/autoencoder_v1.pth"
+)
+
 
 class BodybuildingApp(tk.Tk):
     def __init__(self) -> None:
@@ -98,9 +105,10 @@ class BodybuildingApp(tk.Tk):
             self.classification_model = ExerciseLSTM(
                 input_size, hidden_size, num_layers, num_classes
             )
+
             self.classification_model.load_state_dict(
                 torch.load(
-                    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\lstm_v3.pth",
+                    CLASSIFICATION_MODEL_PATH,
                     map_location=self.device,
                 )
             )
@@ -118,7 +126,7 @@ class BodybuildingApp(tk.Tk):
             self.autoencoder = PoseAutoencoder(input_dim, hidden_dim, latent_dim)
             self.autoencoder.load_state_dict(
                 torch.load(
-                    r"C:\Users\barrt\PycharmProjects\Gymalyze\src\saved_models\autoencoder_v1.pth",
+                    AUTOENCODER_MODEL_PATH,
                     map_location=self.device,
                 )
             )
