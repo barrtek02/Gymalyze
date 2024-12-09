@@ -5,7 +5,7 @@ import time
 import cv2
 import numpy as np
 import torch
-from imutils.video import FileVideoStream
+from src.utils.imutils.video import FileVideoStream
 from src.utils.pose_estimator import PoseEstimator
 from src.utils.repetition_counter import RepetitionCounter
 from src.utils.video_processor import VideoProcessor
