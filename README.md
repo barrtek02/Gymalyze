@@ -26,8 +26,14 @@ source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
 ### Install Requirements
 Install the required packages using pip.
 
+
 ```sh
 pip install -r requirements.txt
+```
+Additionally, to use the GPU version of PyTorch, install the appropriate version using the following command:
+
+```sh
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124```
 ```
 
 ## Usage
