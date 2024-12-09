@@ -39,7 +39,6 @@ class FrameProcessor:
 
         self.exercise_evaluator = ExerciseEvaluator()
 
-
     def start(self):
         self.stop_event.clear()  # Reset the stop event before starting the new thread
 
