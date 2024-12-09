@@ -5,12 +5,12 @@ import time
 import cv2
 import numpy as np
 import torch
-from src.utils.imutils.video import FileVideoStream
-from src.utils.pose_estimator import PoseEstimator
-from src.utils.repetition_counter import RepetitionCounter
-from src.utils.video_processor import VideoProcessor
-from src.utils.imutils.video import WebcamVideoStream, FPS
-from src.utils.autoencoder_exercise_evaluator import ExerciseEvaluator
+from utils.imutils.video import FileVideoStream
+from utils.pose_estimator import PoseEstimator
+from utils.repetition_counter import RepetitionCounter
+from utils.video_processor import VideoProcessor
+from utils.imutils.video import WebcamVideoStream, FPS
+from utils.autoencoder_exercise_evaluator import ExerciseEvaluator
 
 
 class FrameProcessor:

@@ -10,9 +10,9 @@ from gui.home_screen import HomeScreen
 from gui.live_detection import LiveDetectionScreen
 from gui.train_exercise import TrainSpecificScreen
 from gui.upload_review import UploadVideoScreen
-from src.gui.exercise_library_screen import ExerciseLibraryScreen
-from src.models.lstm import ExerciseLSTM
-from src.models.pose_autoencoder import PoseAutoencoder
+from gui.exercise_library_screen import ExerciseLibraryScreen
+from models.lstm import ExerciseLSTM
+from models.pose_autoencoder import PoseAutoencoder
 from utils.database import Database
 import os
 

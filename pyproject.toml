@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Gymalyze"
+version = "0.1.0"
+description = "A project aimed at analyzing exercise data using machine learning models, specifically LSTM networks."
+authors = [
+    { name = "Bartłomiej Ruszaj", email = "bmruszaj@gmail.com" }
+]
+license = { text = "MIT" }
+dependencies = [
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

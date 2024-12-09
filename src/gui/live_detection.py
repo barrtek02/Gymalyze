@@ -7,7 +7,7 @@ from tkinter import Label, ttk
 import cv2
 from PIL import Image, ImageTk
 
-from src.utils.frame_processor import FrameProcessor
+from utils.frame_processor import FrameProcessor
 
 
 class LiveDetectionScreen(tk.Frame):

@@ -1,7 +1,7 @@
 import cv2
 import torch
 
-from src.utils.pose_estimator import PoseEstimator
+from utils.pose_estimator import PoseEstimator
 from pathlib import Path
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor

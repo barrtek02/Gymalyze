@@ -6,7 +6,7 @@ from tkinter import ttk
 from tkinter.ttk import Progressbar
 from PIL import Image, ImageTk
 import cv2
-from src.utils.frame_processor import FrameProcessor
+from utils.frame_processor import FrameProcessor
 
 
 class UploadVideoScreen(tk.Frame):
