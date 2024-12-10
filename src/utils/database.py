@@ -192,7 +192,6 @@ class Database:
         angle_correctness_count,
         pose_correctness_score,
     ):
-        print(pose_correctness_score)
         """Insert an exercise record into the exercise_sessions table."""
         try:
             with self.conn:

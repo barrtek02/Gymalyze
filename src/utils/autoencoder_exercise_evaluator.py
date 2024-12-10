@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -8,10 +9,10 @@ import torch
 class ExerciseEvaluator:
     # Define class-level attributes for the JSON file paths
     ANGLE_THRESHOLDS_PATH = Path(
-        r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\angle_thresholds.json"
+        os.path.join(os.path.dirname(__file__), "../data/angle_thresholds.json")
     )
     FEEDBACK_PATH = Path(
-        r"C:\Users\barrt\PycharmProjects\Gymalyze\src\data\body_parts_and_feedback.json"
+        os.path.join(os.path.dirname(__file__), "../data/body_parts_and_feedback.json")
     )
 
     FRIENDLY_ANGLE_NAMES = {
